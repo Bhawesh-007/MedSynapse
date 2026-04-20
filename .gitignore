@@ -26,5 +26,9 @@ venv.bak/
 *.log
 datasets/
 
+# Node / Frontend
+node_modules/
+dist/
+
 # Models (Ignored due to size, handled via GDrive download)
 models/brain_tumor_model.keras
