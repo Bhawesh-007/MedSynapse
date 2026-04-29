@@ -1,141 +1,65 @@
-import pickle
-import numpy as np
 import os
-import tensorflow as tf
-from tensorflow.keras.models import load_model
+import sys
+import numpy as np
 
-# Apply Keras 3 compatibility patches
-def apply_keras3_compatibility_patches():
-    """Apply comprehensive patches for Keras 3 compatibility issues with Flatten, GlobalAveragePooling2D, etc."""
-    try:
-        layers_to_patch = [
-            tf.keras.layers.Flatten,
-            tf.keras.layers.GlobalAveragePooling2D,
-            tf.keras.layers.GlobalMaxPooling2D,
-            tf.keras.layers.Reshape,
-        ]
-        
-        for layer_class in layers_to_patch:
-            if not hasattr(layer_class, '_original_call_patched'):
-                original_call = layer_class.call
-                
-                def make_patched_call(orig_call):
-                    def patched_call(self, inputs, *args, **kwargs):
-                        if isinstance(inputs, (list, tuple)):
-                            if len(inputs) == 1:
-                                inputs = inputs[0]
-                        if isinstance(inputs, list) and len(inputs) == 1:
-                            if hasattr(inputs[0], 'shape'):
-                                inputs = inputs[0]
-                        return orig_call(self, inputs, *args, **kwargs)
-                    return patched_call
-                
-                layer_class.call = make_patched_call(original_call)
-                layer_class._original_call_patched = True
-    except Exception as patch_err:
-        print(f"Warning: Keras 3 patch application encountered an issue: {patch_err}")
-
-apply_keras3_compatibility_patches()
-
-# Construct absolute path to models directory
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-MODELS_DIR = os.path.join(BASE_DIR, 'models')
+if BASE_DIR not in sys.path:
+    sys.path.insert(0, BASE_DIR)
 
-def verify_diabetes_model():
-    print("Verifying Diabetes Model...")
+try:
+    from backend.services.model_service import ModelService
+except ImportError:
+    from services.model_service import ModelService
+
+def main():
+    print("=" * 60)
+    print("🔬 Verifying MedSynapse AI Diagnostic Models")
+    print("=" * 60)
+
+    ms = ModelService.get_instance()
+
+    # 1. Diabetes Model
+    print("\n1. Verifying Diabetes Model...")
     try:
-        model_path = os.path.join(MODELS_DIR, 'diabetes_model.pkl')
-        scaler_path = os.path.join(MODELS_DIR, 'diabetes_scaler.pkl')
-        
-        model = pickle.load(open(model_path, 'rb'))
-        scaler = pickle.load(open(scaler_path, 'rb'))
-        
-        # Dummy input: 8 features + 1 engineered feature = 9 features
-        # pregnancies, glucose, blood_pressure, skin_thickness, insulin, bmi, dpf, age, bmi_cat
-        input_data = np.array([[1, 85, 66, 29, 0, 26.6, 0.351, 31, 2]]) 
-        input_scaled = scaler.transform(input_data)
-        prediction = model.predict(input_scaled)
-        print(f"Diabetes Model Verified! Prediction: {prediction}")
+        res = ms.predict_diabetes({'glucose': 140, 'bmi': 30.5, 'age': 45, 'blood_pressure': 80})
+        print(f"   ✅ Diabetes Model Verified! Prediction: {res['prediction']} (Risk: {res['risk_percentage']}%)")
     except Exception as e:
-        print(f"Error verifying Diabetes Model: {e}")
+        print(f"   ❌ Error: {e}")
 
-def verify_heart_model():
-    print("\nVerifying Heart Disease Model...")
+    # 2. Heart Model
+    print("\n2. Verifying Heart Disease Model...")
     try:
-        model_path = os.path.join(MODELS_DIR, 'heart_model.pkl')
-        scaler_path = os.path.join(MODELS_DIR, 'heart_scaler.pkl')
-        
-        model = pickle.load(open(model_path, 'rb'))
-        scaler = pickle.load(open(scaler_path, 'rb'))
-        
-        # Dummy input: 13 features
-        # age, sex, cp, trestbps, chol, fbs, restecg, thalach, exang, oldpeak, slope, ca, thal
-        input_data = np.array([[63, 1, 3, 145, 233, 1, 0, 150, 0, 2.3, 0, 0, 1]])
-        input_scaled = scaler.transform(input_data)
-        prediction = model.predict(input_scaled)
-        print(f"Heart Disease Model Verified! Prediction: {prediction}")
+        res = ms.predict_heart({'age': 55, 'sex': 1, 'cp': 2, 'trestbps': 135, 'chol': 240})
+        print(f"   ✅ Heart Model Verified! Prediction: {res['prediction']} (Risk: {res['risk_percentage']}%)")
     except Exception as e:
-        print(f"Error verifying Heart Disease Model: {e}")
+        print(f"   ❌ Error: {e}")
 
-def verify_xray_model():
-    print("\nVerifying Chest X-Ray Model...")
+    # 3. Chest X-Ray Model
+    print("\n3. Verifying Chest X-Ray Pneumonia Model...")
     try:
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-        model_path = os.path.join(MODELS_DIR, 'xrays_pneumonia.keras')
-        
-        if not os.path.exists(model_path):
-            print(f"Chest X-Ray Model not found at {model_path}")
-            return
-        
-        custom_objects = {
-            'Flatten': tf.keras.layers.Flatten,
-            'GlobalAveragePooling2D': tf.keras.layers.GlobalAveragePooling2D,
-        }
-
-        model = load_model(model_path, custom_objects=custom_objects, compile=False)
-        
-        # Dummy image input: (1, 224, 224, 3)
-        input_data = np.random.rand(1, 224, 224, 3).astype(np.float32)
-        prediction = model.predict(input_data, verbose=0)
-        print(f"Chest X-Ray Model Verified! Prediction shape: {prediction.shape}, Value: {prediction[0][0]}")
+        model = ms.get_xray_model()
+        dummy_input = np.random.rand(1, 224, 224, 3).astype(np.float32)
+        pred = model.predict(dummy_input, verbose=0)
+        print(f"   ✅ Chest X-Ray Model Verified! Prediction shape: {pred.shape}")
     except Exception as e:
-        print(f"Error verifying Chest X-Ray Model: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"   ❌ Error: {e}")
 
-def verify_brain_tumor_model():
-    print("\nVerifying Brain Tumor Model...")
+    # 4. Brain Tumor MRI Model
+    print("\n4. Verifying Brain Tumor MRI Model...")
     try:
-        os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-        
-        # Check for .keras format first (newer format)
-        keras_path = os.path.join(MODELS_DIR, 'brain_tumor_model.keras')
-        h5_path = os.path.join(MODELS_DIR, 'brain_tumor_model.h5')
-        
-        model_path = keras_path if os.path.exists(keras_path) else h5_path
-        
-        if not os.path.exists(model_path):
-            print(f"Brain Tumor Model not found at {keras_path} or {h5_path}. Please train the model using notebooks/Final_Brain_Tumor_Prediction.ipynb")
-            return
-
-        custom_objects = {
-            'Flatten': tf.keras.layers.Flatten,
-            'GlobalAveragePooling2D': tf.keras.layers.GlobalAveragePooling2D,
-        }
-        
-        model = load_model(model_path, custom_objects=custom_objects, compile=False)
-        
-        # Dummy image input: (1, 299, 299, 3)
-        input_data = np.random.rand(1, 299, 299, 3).astype(np.float32)
-        prediction = model.predict(input_data, verbose=0)
-        print(f"Brain Tumor Model Verified! Prediction shape: {prediction.shape}, Max Prob: {np.max(prediction):.4f}")
+        model = ms.get_mri_model()
+        if model is not None:
+            dummy_input = np.random.rand(1, 299, 299, 3).astype(np.float32)
+            pred = model.predict(dummy_input, verbose=0)
+            print(f"   ✅ Brain Tumor Model Verified! Prediction shape: {pred.shape}")
+        else:
+            print("   ⚠️ Brain Tumor Model file not found.")
     except Exception as e:
-        print(f"Error verifying Brain Tumor Model: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"   ❌ Error: {e}")
+
+    print("\n" + "=" * 60)
+    print("🎉 Verification Complete!")
+    print("=" * 60)
 
 if __name__ == "__main__":
-    verify_diabetes_model()
-    verify_heart_model()
-    verify_xray_model()
-    verify_brain_tumor_model()
+    main()
