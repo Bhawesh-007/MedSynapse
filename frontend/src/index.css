@@ -293,22 +293,157 @@ body {
   animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* Print Styles for Medical Report Export */
+/* ==========================================================================
+   A4 CLINICAL MEDICAL REPORT & PRINT STYLES
+   ========================================================================== */
+@page {
+  size: A4 portrait;
+  margin: 10mm 12mm 12mm 12mm;
+}
+
 @media print {
-  body {
-    background: white !important;
-    color: black !important;
+  /* Reset background and colors for clean paper printing */
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
   }
-  .no-print {
+
+  /* Hide all web application chrome and interactive UI controls */
+  nav,
+  footer,
+  .no-print,
+  button,
+  form,
+  input,
+  select,
+  .badge-presets,
+  header {
     display: none !important;
   }
+
+  main {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Hide all non-report sibling components */
+  .glass-panel:not(.clinical-report-sheet) {
+    display: none !important;
+  }
+
+  /* Dedicated A4 Clinical Report Sheet */
+  .clinical-report-sheet {
+    display: block !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    background: #ffffff !important;
+    color: #0f172a !important;
+    border: 1.5px solid #94a3b8 !important;
+    border-radius: 6px !important;
+    padding: 12mm 14mm !important;
+    margin: 0 auto !important;
+    box-shadow: none !important;
+    page-break-after: avoid !important;
+    break-after: avoid !important;
+  }
+
   .print-only {
     display: block !important;
   }
-  .glass-panel {
-    background: white !important;
-    border: 1px solid #ccc !important;
-    box-shadow: none !important;
-    color: black !important;
+
+  .print-header {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-start !important;
+    border-bottom: 2px solid #0284c7 !important;
+    padding-bottom: 8px !important;
+    margin-bottom: 12px !important;
+  }
+
+  .print-table {
+    width: 100% !important;
+    border-collapse: collapse !important;
+    margin: 10px 0 !important;
+  }
+
+  .print-table th, 
+  .print-table td {
+    border: 1px solid #cbd5e1 !important;
+    padding: 5px 8px !important;
+    font-size: 9pt !important;
+    text-align: left !important;
+  }
+
+  .print-table th {
+    background-color: #f1f5f9 !important;
+    color: #0f172a !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    font-size: 8pt !important;
+    letter-spacing: 0.5px !important;
+  }
+
+  .print-status-box {
+    border: 1.5px solid #cbd5e1 !important;
+    background-color: #f8fafc !important;
+    padding: 10px 14px !important;
+    border-radius: 6px !important;
+    margin: 10px 0 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .print-status-box.danger {
+    border-color: #f43f5e !important;
+    background-color: #fff1f2 !important;
+  }
+
+  .print-status-box.success {
+    border-color: #10b981 !important;
+    background-color: #f0fdf4 !important;
+  }
+
+  .print-status-box.warning {
+    border-color: #f59e0b !important;
+    background-color: #fffbeb !important;
+  }
+
+  .print-grid-2 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 12px !important;
+  }
+
+  .print-grid-3 {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr 1fr !important;
+    gap: 8px !important;
+  }
+
+  .print-footer-sign {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: flex-end !important;
+    margin-top: 18px !important;
+    padding-top: 10px !important;
+    border-top: 1px dashed #cbd5e1 !important;
+    font-size: 8.5pt !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .break-inside-avoid {
+    break-inside: avoid !important;
+    page-break-inside: avoid !important;
   }
 }
+

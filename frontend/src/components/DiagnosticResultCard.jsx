@@ -1,12 +1,42 @@
-import React from 'react';
-import { ShieldCheck, AlertTriangle, XCircle, Printer, FileDown, CheckCircle, Info, Sparkles } from 'lucide-react';
+import React, { useState } from 'react';
+import { 
+  ShieldCheck, 
+  AlertTriangle, 
+  XCircle, 
+  Printer, 
+  FileDown, 
+  CheckCircle, 
+  Info, 
+  Sparkles, 
+  Activity, 
+  FileCheck,
+  Stethoscope
+} from 'lucide-react';
 import confetti from 'canvas-confetti';
 
-export default function DiagnosticResultCard({ result, onReset, title = 'Diagnostic Risk Assessment' }) {
+export default function DiagnosticResultCard({ 
+  result, 
+  onReset, 
+  title = 'Diagnostic Risk Assessment',
+  inputData = null
+}) {
   if (!result) return null;
 
-  const isHealthy = result.prediction === 0 || result.is_positive === false || result.has_disease === false || result.has_tumor === false || result.diagnosis === 'No Tumor (Healthy)';
-  const riskPercent = result.risk_percentage || result.confidence_percentage || (result.pneumonia_probability ? (result.pneumonia_probability * 100).toFixed(1) : 0);
+  const [reportId] = useState(() => `MS-${Math.floor(100000 + Math.random() * 900000)}`);
+  const [reportDate] = useState(() => new Date().toLocaleString('en-US', {
+    dateStyle: 'medium',
+    timeStyle: 'short'
+  }));
+
+  const isHealthy = result.prediction === 0 || 
+                    result.is_positive === false || 
+                    result.has_disease === false || 
+                    result.has_tumor === false || 
+                    result.diagnosis === 'No Tumor (Healthy)';
+
+  const riskPercent = result.risk_percentage || 
+                      result.confidence_percentage || 
+                      (result.pneumonia_probability ? (result.pneumonia_probability * 100).toFixed(1) : 0);
 
   // Trigger celebration confetti if healthy result
   React.useEffect(() => {
@@ -19,8 +49,14 @@ export default function DiagnosticResultCard({ result, onReset, title = 'Diagnos
     }
   }, [isHealthy]);
 
-  const handlePrint = () => {
+  const handleDownloadPDF = () => {
+    const originalTitle = document.title;
+    const diseaseName = (result.disease || result.modality || 'Medical').replace(/\s+/g, '_');
+    document.title = `MedSynapse_${diseaseName}_Report_${reportId}`;
     window.print();
+    setTimeout(() => {
+      document.title = originalTitle;
+    }, 1000);
   };
 
   const getRiskColor = () => {
@@ -30,209 +66,242 @@ export default function DiagnosticResultCard({ result, onReset, title = 'Diagnos
   };
 
   const riskColor = getRiskColor();
+  const statusClass = isHealthy ? 'success' : (result.risk_tier === 'Moderate Risk' ? 'warning' : 'danger');
 
   return (
-    <div className="glass-panel glass-panel-glow animate-fade-in" style={{ padding: '1.75rem', marginTop: '1.5rem' }}>
-      {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '1rem' }}>
+    <div className="glass-panel glass-panel-glow clinical-report-sheet animate-fade-in" style={{ padding: '1.75rem', marginTop: '1.5rem' }}>
+      
+      {/* =========================================================================
+          1. CLINICAL HEADER & HOSPITAL LETTERHEAD
+          ========================================================================= */}
+      <div className="print-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem', borderBottom: '2px solid rgba(56, 189, 248, 0.3)', paddingBottom: '1rem' }}>
         <div>
-          <span className="badge badge-cyan" style={{ marginBottom: '6px' }}>Diagnostic Report</span>
-          <h3 style={{ fontSize: '1.35rem', fontWeight: 700, color: '#ffffff' }}>{title}</h3>
-          <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-            Evaluated by MedSynapse AI Diagnostic Pipeline • {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <Activity size={22} color="#0284c7" />
+            <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, letterSpacing: '-0.3px', color: '#ffffff' }} className="report-inst-title">
+              MEDSYNAPSE CLINICAL INTELLIGENCE LABS
+            </h2>
+          </div>
+          <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '3px' }}>
+            Department of AI Diagnostics & Clinical Radiology • Automated Specimen Evaluation
           </p>
         </div>
 
-        <div style={{ display: 'flex', gap: '8px' }} className="no-print">
-          <button onClick={handlePrint} className="btn-secondary" style={{ padding: '8px 14px', fontSize: '0.85rem' }}>
-            <Printer size={15} /> Print / Save PDF
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ fontSize: '0.8rem', fontWeight: 700, fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>
+            REF: {reportId}
+          </div>
+          <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+            Issued: {reportDate}
+          </div>
+        </div>
+      </div>
+
+      {/* Action Toolbar (Screen Only) */}
+      <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '1rem 0', flexWrap: 'wrap', gap: '10px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span className="badge badge-cyan">A4 Standardized Report</span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Ready for clinical export & print</span>
+        </div>
+
+        <div style={{ display: 'flex', gap: '10px' }}>
+          <button 
+            onClick={handleDownloadPDF} 
+            className="btn-primary" 
+            style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <FileDown size={16} /> Download A4 PDF Report
+          </button>
+          <button 
+            onClick={handleDownloadPDF} 
+            className="btn-secondary" 
+            style={{ padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Printer size={15} /> Print Document
           </button>
           {onReset && (
-            <button onClick={onReset} className="btn-secondary" style={{ padding: '8px 14px', fontSize: '0.85rem' }}>
+            <button 
+              onClick={onReset} 
+              className="btn-secondary" 
+              style={{ padding: '8px 14px', fontSize: '0.85rem' }}
+            >
               Reset Analysis
             </button>
           )}
         </div>
       </div>
 
-      {/* Main Score & Status Section */}
-      <div style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-        gap: '1.5rem',
-        margin: '1.5rem 0',
-        alignItems: 'center'
+      {/* =========================================================================
+          2. SPECIMEN & PATIENT CLINICAL DATA SUMMARY (A4 TABLE)
+          ========================================================================= */}
+      <div className="break-inside-avoid" style={{ margin: '1rem 0' }}>
+        <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
+          <tbody>
+            <tr style={{ backgroundColor: 'rgba(30, 41, 59, 0.4)' }}>
+              <td style={{ width: '22%', fontWeight: 700, color: 'var(--text-muted)' }}>Diagnostic Scope:</td>
+              <td style={{ width: '28%', fontWeight: 600, color: '#ffffff' }}>{title}</td>
+              <td style={{ width: '22%', fontWeight: 700, color: 'var(--text-muted)' }}>Modality / Engine:</td>
+              <td style={{ width: '28%', color: '#38bdf8' }}>{result.disease || result.modality || 'Machine Learning Multi-Modal'}</td>
+            </tr>
+            <tr>
+              <td style={{ fontWeight: 700, color: 'var(--text-muted)' }}>Assessment Status:</td>
+              <td style={{ fontWeight: 600, color: isHealthy ? '#10b981' : '#f43f5e' }}>
+                {isHealthy ? 'Normal / Negative Finding' : 'Pathological / Positive Indication'}
+              </td>
+              <td style={{ fontWeight: 700, color: 'var(--text-muted)' }}>Validation Pipeline:</td>
+              <td style={{ color: 'var(--text-secondary)' }}>Keras 3 + Scikit-Learn Scaler</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {/* =========================================================================
+          3. PRIMARY DIAGNOSTIC IMPRESSION (STRATIFICATION BOX)
+          ========================================================================= */}
+      <div className={`print-status-box ${statusClass} break-inside-avoid`} style={{
+        padding: '1.25rem',
+        borderRadius: '10px',
+        margin: '1.25rem 0',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '1rem'
       }}>
-        {/* Risk Gauge Visual */}
-        <div style={{
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '1.25rem',
-          backgroundColor: 'rgba(15, 23, 42, 0.6)',
-          borderRadius: '14px',
-          border: '1px solid rgba(255, 255, 255, 0.06)'
-        }}>
-          <div style={{ position: 'relative', width: '150px', height: '150px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <svg viewBox="0 0 36 36" style={{ width: '100%', height: '100%', transform: 'rotate(-90deg)' }}>
-              <path
-                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                fill="none"
-                stroke="rgba(255, 255, 255, 0.08)"
-                strokeWidth="3.2"
-              />
-              <path
-                d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831"
-                fill="none"
-                stroke={riskColor}
-                strokeWidth="3.4"
-                strokeDasharray={`${riskPercent}, 100`}
-                strokeLinecap="round"
-                style={{ transition: 'stroke-dasharray 1s ease' }}
-              />
-            </svg>
-            <div style={{ position: 'absolute', textAlign: 'center' }}>
-              <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#ffffff', fontFamily: 'var(--font-mono)' }}>
-                {riskPercent}%
-              </div>
-              <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Risk / Conf
-              </div>
-            </div>
-          </div>
-          <div style={{ marginTop: '0.75rem', textAlign: 'center' }}>
-            <span 
-              className={`badge ${isHealthy ? 'badge-success' : 'badge-danger'}`}
-              style={{ fontSize: '0.85rem', padding: '6px 14px' }}
-            >
-              {isHealthy ? <ShieldCheck size={14} /> : <AlertTriangle size={14} />}
-              {result.risk_tier || (isHealthy ? 'Low Risk / Healthy' : 'Action Recommended')}
-            </span>
-          </div>
-        </div>
-
-        {/* Diagnosis Outcome Details */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
-          <div>
-            <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-              Primary Diagnostic Classification
-            </span>
-            <h2 style={{
-              fontSize: '1.6rem',
-              fontWeight: 800,
-              color: riskColor,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              marginTop: '4px'
-            }}>
-              {result.diagnosis || (result.has_disease ? `High Risk Detected` : `Optimal Baseline`)}
-            </h2>
-          </div>
-
+        <div>
+          <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)' }}>
+            Primary Clinical Classification
+          </span>
+          <h2 style={{
+            fontSize: '1.55rem',
+            fontWeight: 800,
+            color: riskColor,
+            margin: '4px 0 6px 0',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px'
+          }}>
+            {isHealthy ? <ShieldCheck size={26} color="#10b981" /> : <AlertTriangle size={26} color={riskColor} />}
+            {result.diagnosis || (result.has_disease ? `High Risk Detected` : `Optimal Baseline`)}
+          </h2>
           {result.description && (
-            <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+            <p style={{ fontSize: '0.88rem', color: 'var(--text-secondary)', margin: 0, maxWidth: '650px' }}>
               {result.description}
             </p>
           )}
+        </div>
 
-          {/* MRI Multi-class breakdown if available */}
-          {result.class_probabilities && (
-            <div style={{ marginTop: '0.5rem' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>
-                Model Class Confidence Distribution
-              </span>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', marginTop: '6px' }}>
-                {Object.entries(result.class_probabilities).map(([cls, prob]) => (
-                  <div key={cls} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
-                    <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{cls}</span>
-                    <div style={{ flex: 1, height: '6px', backgroundColor: 'rgba(255, 255, 255, 0.08)', borderRadius: '3px', overflow: 'hidden' }}>
-                      <div style={{
-                        width: `${prob}%`,
-                        height: '100%',
-                        backgroundColor: prob > 40 ? '#38bdf8' : 'rgba(255, 255, 255, 0.2)',
-                        borderRadius: '3px'
-                      }} />
-                    </div>
-                    <span style={{ fontSize: '0.8rem', color: '#ffffff', fontFamily: 'var(--font-mono)', minWidth: '45px', textAlign: 'right' }}>
-                      {prob}%
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+        <div style={{ textAlign: 'center', padding: '10px 20px', backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+          <div style={{ fontSize: '1.85rem', fontWeight: 900, fontFamily: 'var(--font-mono)', color: riskColor }}>
+            {riskPercent}%
+          </div>
+          <div style={{ fontSize: '0.72rem', textTransform: 'uppercase', color: 'var(--text-muted)', fontWeight: 600 }}>
+            {result.risk_tier || (isHealthy ? 'Healthy Index' : 'Confidence')}
+          </div>
         </div>
       </div>
 
-      {/* Image Transformation & Tensor Calibration Details (if radiology / vision model) */}
+      {/* =========================================================================
+          4. IMAGE TRANSFORMATION & TENSOR NORMALIZATION METRICS (IF RADIOLOGY/MRI)
+          ========================================================================= */}
       {result.image_transformation && (
-        <div style={{
+        <div className="break-inside-avoid" style={{
           padding: '10px 14px',
           backgroundColor: 'rgba(56, 189, 248, 0.05)',
-          border: '1px solid rgba(56, 189, 248, 0.2)',
-          borderRadius: '10px',
-          marginBottom: '1rem',
-          display: 'flex',
-          flexWrap: 'wrap',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          gap: '8px'
+          border: '1px solid rgba(56, 189, 248, 0.25)',
+          borderRadius: '8px',
+          margin: '1rem 0'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="badge badge-cyan" style={{ fontSize: '0.75rem' }}>Auto-Transformation Active</span>
-            <span style={{ fontSize: '0.8rem', color: '#e2e8f0' }}>
-              Original: <strong>{result.image_transformation.original_dimensions}</strong> ({result.image_transformation.original_mode})
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <Sparkles size={14} /> AI Radiographic Tensor Preprocessing:
+            </span>
+            <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
+              Source Image: <strong>{result.image_transformation.original_dimensions}</strong> ({result.image_transformation.original_mode})
+            </span>
+            <span style={{ fontSize: '0.8rem', color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>
+              Standardized Model Tensor: <strong>{result.image_transformation.transformed_shape}</strong> (Float32 [0.0 - 1.0])
             </span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.8rem', color: 'var(--text-secondary)' }}>
-            <span>➡️ Standardized Tensor: <strong style={{ color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>{result.image_transformation.transformed_shape}</strong></span>
-            <span>• {result.image_transformation.normalization}</span>
-          </div>
         </div>
       )}
 
-      {/* Contributing Factors Section */}
+      {/* =========================================================================
+          5. MULTI-CLASS PROBABILITIES TABLE (IF MRI SCAN)
+          ========================================================================= */}
+      {result.class_probabilities && (
+        <div className="break-inside-avoid" style={{ margin: '1rem 0' }}>
+          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
+            Differential Model Class Probabilities Distribution:
+          </h4>
+          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ textAlign: 'left' }}>Pathology Class</th>
+                <th style={{ width: '45%' }}>Probability Weight</th>
+                <th style={{ textAlign: 'right', width: '20%' }}>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {Object.entries(result.class_probabilities).map(([cls, prob]) => (
+                <tr key={cls}>
+                  <td style={{ fontWeight: 600 }}>{cls}</td>
+                  <td>
+                    <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div style={{ width: `${prob}%`, height: '100%', backgroundColor: prob > 40 ? '#0284c7' : '#94a3b8' }} />
+                    </div>
+                  </td>
+                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
+                    {prob}%
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* =========================================================================
+          6. CLINICAL BIOMARKER / CONTRIBUTING FACTORS MATRIX
+          ========================================================================= */}
       {result.contributing_factors && result.contributing_factors.length > 0 && (
-        <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1rem' }}>
-          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#ffffff', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Sparkles size={16} color="#38bdf8" /> Key Clinical Indicators & Biomarkers
+        <div className="break-inside-avoid" style={{ margin: '1.25rem 0' }}>
+          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Activity size={15} color="#38bdf8" /> Significant Clinical Indicators & Biomarker Analysis
           </h4>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '0.75rem' }}>
-            {result.contributing_factors.map((fac, idx) => (
-              <div 
-                key={idx}
-                style={{
-                  padding: '10px 14px',
-                  backgroundColor: 'rgba(30, 41, 59, 0.5)',
-                  borderRadius: '10px',
-                  border: '1px solid rgba(255, 255, 255, 0.05)'
-                }}
-              >
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#ffffff' }}>{fac.factor}</span>
-                  <span style={{ fontSize: '0.75rem', fontFamily: 'var(--font-mono)', color: '#38bdf8' }}>{fac.value}</span>
-                </div>
-                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  {fac.impact}
-                </p>
-              </div>
-            ))}
-          </div>
+          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                <th style={{ width: '30%' }}>Biomarker / Factor</th>
+                <th style={{ width: '25%' }}>Observed Value</th>
+                <th style={{ width: '45%' }}>Clinical Impact Evaluation</th>
+              </tr>
+            </thead>
+            <tbody>
+              {result.contributing_factors.map((fac, idx) => (
+                <tr key={idx}>
+                  <td style={{ fontWeight: 600, color: '#ffffff' }}>{fac.factor}</td>
+                  <td style={{ fontFamily: 'var(--font-mono)', color: '#38bdf8', fontWeight: 600 }}>{fac.value}</td>
+                  <td style={{ color: 'var(--text-secondary)' }}>{fac.impact}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
 
-      {/* Actionable Clinical Recommendations */}
+      {/* =========================================================================
+          7. EVIDENCE-BASED RECOMMENDATIONS & CLINICAL GUIDANCE
+          ========================================================================= */}
       {result.recommendations && result.recommendations.length > 0 && (
-        <div style={{ marginTop: '1.5rem', borderTop: '1px solid rgba(255, 255, 255, 0.06)', paddingTop: '1rem' }}>
-          <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#ffffff', marginBottom: '0.75rem', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Info size={16} color="#10b981" /> Recommended Next Steps & Clinical Guidance
+        <div className="break-inside-avoid" style={{ margin: '1.25rem 0' }}>
+          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <CheckCircle size={15} color="#10b981" /> Recommended Next Steps & Clinical Guidance
           </h4>
-          <ul style={{ listStyle: 'none', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {result.recommendations.map((rec, idx) => (
-              <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>
-                <CheckCircle size={15} color="#10b981" style={{ flexShrink: 0, marginTop: '3px' }} />
+              <li key={idx} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+                <span style={{ color: '#10b981', fontWeight: 700 }}>•</span>
                 <span>{rec}</span>
               </li>
             ))}
@@ -240,9 +309,24 @@ export default function DiagnosticResultCard({ result, onReset, title = 'Diagnos
         </div>
       )}
 
-      <div style={{ marginTop: '1.25rem', padding: '10px 14px', backgroundColor: 'rgba(14, 165, 233, 0.06)', borderRadius: '8px', border: '1px solid rgba(14, 165, 233, 0.15)', fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-        ⚠️ <strong>Medical Disclaimer:</strong> This assessment is generated by machine learning models for early screening and triage support. It does not replace definitive medical diagnosis by a licensed healthcare professional.
+      {/* =========================================================================
+          8. CLINICAL SIGN-OFF & MEDICAL DISCLAIMER BLOCK
+          ========================================================================= */}
+      <div className="print-footer-sign break-inside-avoid" style={{ marginTop: '1.5rem', paddingTop: '1rem', borderTop: '1px solid rgba(255, 255, 255, 0.1)', fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+        <div style={{ maxWidth: '60%' }}>
+          <p style={{ margin: 0, fontSize: '0.74rem', lineHeight: 1.4 }}>
+            <strong>Institutional Medical Disclaimer:</strong> This diagnostic report is generated using calibrated machine learning ensemble models and deep neural networks for screening assistance. Final diagnostic and therapeutic decisions must be verified by a licensed medical practitioner.
+          </p>
+        </div>
+
+        <div style={{ textAlign: 'right' }}>
+          <div style={{ height: '32px', borderBottom: '1px solid #94a3b8', width: '180px', marginBottom: '4px' }} />
+          <div style={{ fontWeight: 700, color: '#ffffff', fontSize: '0.78rem' }}>MedSynapse Clinical AI v2.0</div>
+          <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Automated Verification Signature</div>
+        </div>
       </div>
+
     </div>
   );
 }
+
