@@ -27,6 +27,130 @@ The system combines **Computer Vision**, **Machine Learning ensembles**, and **D
 
 ---
 
+## 🏗️ System Architecture
+
+```mermaid
+flowchart TB
+    subgraph User["👤 User / Clinician"]
+        Browser["Web Browser"]
+    end
+
+    subgraph Frontend["🖥️  Frontend — React 18 + Vite SPA"]
+        direction TB
+        Navbar["Navbar & Tab Router"]
+        subgraph Views["UI Views / Modules"]
+            V_Home["🏠 Dashboard Home"]
+            V_OCR["📄 OCR Lab Scanner"]
+            V_Diab["🩸 Diabetes Workspace"]
+            V_Heart["❤️  Cardiac Workspace"]
+            V_XRay["🩻 X-Ray Analyzer"]
+            V_MRI["🧠 MRI Analyzer"]
+        end
+        DiagCard["DiagnosticResultCard"]
+        APIClient["API Service Client\n(api.js — fetch / FormData)"]
+
+        Navbar --> Views
+        Views --> DiagCard
+        Views --> APIClient
+    end
+
+    subgraph Backend["⚡ Backend — FastAPI + Uvicorn"]
+        direction TB
+        Router["FastAPI App\n(CORS · Pydantic Validation · Error Handling)"]
+        subgraph Endpoints["REST Endpoints"]
+            EP_Health["GET  /api/health"]
+            EP_Sample["GET  /api/sample-reports"]
+            EP_OCR["POST /api/ocr/parse-report"]
+            EP_Diab["POST /api/predict/diabetes"]
+            EP_Heart["POST /api/predict/heart"]
+            EP_XRay["POST /api/predict/xray"]
+            EP_MRI["POST /api/predict/mri"]
+        end
+        StaticSPA["SPA Static File Server\n(/frontend/dist)"]
+
+        Router --> Endpoints
+        Router --> StaticSPA
+    end
+
+    subgraph Services["🧠 AI Service Layer"]
+        direction LR
+        subgraph OCREngine["Document Intelligence\nocr_service.py"]
+            OCR_Extract["Text Extractor\n(PDF → PyMuPDF · Image → Tesseract)"]
+            OCR_Preproc["Image Preprocessor\n(Grayscale · Contrast Enhance)"]
+            OCR_Regex["Regex Parameter Matcher\n(13+ clinical biomarkers)"]
+            OCR_Ready["Ready-Input Builder\n(diabetes / heart defaults)"]
+
+            OCR_Extract --> OCR_Preproc --> OCR_Regex --> OCR_Ready
+        end
+
+        subgraph ModelSvc["Model Inference Service\nmodel_service.py  — Singleton"]
+            direction TB
+            ImgTransform["Image Transformer\n(EXIF · Alpha · Lanczos Resize · Float32 Norm)"]
+            DiabInfer["Diabetes Predictor\n(Scaler → Ensemble → Risk Tier)"]
+            HeartInfer["Heart Disease Predictor\n(Scaler → LogReg → Risk Tier)"]
+            XRayInfer["X-Ray CNN Predictor\n(224×224 → CNN → Sigmoid)"]
+            MRIInfer["Brain MRI Predictor\n(299×299 → Xception → Softmax 4-class)"]
+            RiskGen["Clinical Risk & Recommendation Generator"]
+
+            ImgTransform --> XRayInfer
+            ImgTransform --> MRIInfer
+            DiabInfer --> RiskGen
+            HeartInfer --> RiskGen
+            XRayInfer --> RiskGen
+            MRIInfer --> RiskGen
+        end
+    end
+
+    subgraph ModelStore["💾 Serialised Model Artefacts\n/models/"]
+        M1["diabetes_model.pkl\ndiabetes_scaler.pkl"]
+        M2["heart_model.pkl\nheart_scaler.pkl"]
+        M3["xrays_pneumonia.keras\n(CNN · input 224×224×3)"]
+        M4["brain_tumor_model.keras\n(Xception · input 299×299×3)"]
+    end
+
+    subgraph Notebooks["📓 Offline Training\n/notebooks/"]
+        NB1["Final_Diabetes_Prediction.ipynb"]
+        NB2["Final_Heart_Disease_Prediction.ipynb"]
+        NB3["Final_Chest_XRay_Prediction.ipynb"]
+        NB4["Final_Brain_Tumor_Prediction.ipynb"]
+    end
+
+    %% ── User ↔ Frontend ──────────────────────────────────
+    Browser <-->|"HTTPS / localhost"| Frontend
+
+    %% ── Frontend ↔ Backend ───────────────────────────────
+    APIClient -->|"HTTP REST (JSON / multipart)"| Router
+
+    %% ── Endpoints → Services ─────────────────────────────
+    EP_OCR  --> OCR_Extract
+    EP_Diab --> DiabInfer
+    EP_Heart --> HeartInfer
+    EP_XRay --> ImgTransform
+    EP_MRI  --> ImgTransform
+
+    %% ── Services → Model Store ───────────────────────────
+    DiabInfer  --> M1
+    HeartInfer --> M2
+    XRayInfer  --> M3
+    MRIInfer   --> M4
+
+    %% ── Notebooks → Model Store (offline) ────────────────
+    Notebooks -.->|"train → export"| ModelStore
+```
+
+> **Architecture at a Glance**
+> | Layer | Technology | Responsibility |
+> | :--- | :--- | :--- |
+> | **Client / SPA** | React 18, Vite, Lucide | Interactive dashboard, file uploads, animated risk gauges, result cards |
+> | **API Gateway** | FastAPI, Uvicorn, Pydantic | Routing, request validation, CORS, SPA serving |
+> | **Document Intelligence** | PyMuPDF, Tesseract OCR, PIL | PDF/image text extraction, contrast enhancement, regex biomarker parsing |
+> | **ML Inference** | Scikit-learn, NumPy | Diabetes (soft-voting ensemble) & Heart disease (Logistic Regression + Scaler) prediction |
+> | **DL Vision Inference** | TensorFlow / Keras 3 | Pneumonia detection (CNN) & Brain tumor 4-class classification (Xception) |
+> | **Model Storage** | `.pkl`, `.keras` files | Pre-trained weights & scalers; lazy-loaded singleton pattern |
+> | **Offline Training** | Jupyter Notebooks | Dataset exploration, model training, and artefact export |
+
+---
+
 ## 📑 Diagnostic Modules & AI Stack
 
 | Module | Diagnostic Domain | Model Architecture | Key Biomarkers / Scans |
