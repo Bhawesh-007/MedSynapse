@@ -176,6 +176,144 @@ To ensure deep learning vision models execute seamlessly without shape mismatch 
 
 ---
 
+## 🔄 Project Pipeline
+
+The system has **three independent but interoperable pipelines** that share a common API gateway and result card component.
+
+---
+
+### Pipeline 1 — Smart Lab Report OCR
+
+Converts any raw clinical document (PDF or image) into structured biomarker values ready to feed directly into Prediction Pipeline 2.
+
+```mermaid
+flowchart LR
+    A(["📂 Input\nPDF / Image / Raw Text"]) --> B
+
+    subgraph B["1 · Document Extraction"]
+        B1{"File\nType?"}
+        B1 -->|PDF| B2["PyMuPDF\nEmbedded text extraction"]
+        B1 -->|Scanned PDF| B3["PyMuPDF render @ 200 DPI\n→ Tesseract OCR"]
+        B1 -->|Image| B4["PIL Grayscale + Contrast ×1.8\n→ Tesseract OCR"]
+        B1 -->|Raw Text| B5["Pass-through"]
+    end
+
+    B2 & B3 & B4 & B5 --> C
+
+    subgraph C["2 · Clinical Parameter Extraction"]
+        C1["Regex Matching Engine\n13+ biomarkers"]
+        C2["Glucose · BP · Insulin · BMI\nAge · Sex · Skin Thickness · DPF\nChol · HR · FBS · CP · ECG\nExang · ST Depression"]
+        C1 --> C2
+    end
+
+    C2 --> D
+
+    subgraph D["3 · Structured Output Builder"]
+        D1["Diabetes Ready-Input\n8 fields with defaults"]
+        D2["Heart Ready-Input\n13 fields with defaults"]
+        D3["Confidence Scores\n& Status Labels"]
+    end
+
+    D --> E(["✅ JSON Response\nparameters + ready_inputs"])
+    E --> F(["🔁 Auto-fill\nDiabetes / Heart Workspace"])
+```
+
+---
+
+### Pipeline 2 — Tabular ML Prediction  *(Diabetes & Heart Disease)*
+
+Processes structured clinical biomarkers through scikit-learn models to produce a risk tier, probability score, contributing factors, and clinical recommendations.
+
+```mermaid
+flowchart LR
+    A(["🔢 Input\nStructured Biomarkers\nJSON payload"]) --> B
+
+    subgraph B["1 · Input Validation & Feature Engineering"]
+        B1["Pydantic Schema Validation\nDiabetesInput / HeartInput"]
+        B2["BMI Categorisation\n0=Underweight · 1=Normal\n2=Overweight · 3=Obese"]
+        B1 --> B2
+    end
+
+    B2 --> C
+
+    subgraph C["2 · Feature Scaling"]
+        C1["StandardScaler\n.transform(input_array)\nLoaded from .pkl"]
+    end
+
+    C --> D
+
+    subgraph D["3 · Model Inference"]
+        D1["Scikit-learn Model\n.predict() → class label\n.predict_proba() → probabilities"]
+        D2{{"🩸 Diabetes\nSoft-Voting Ensemble\n(RF + GradBoost + LR)"}}
+        D3{{"❤️ Heart Disease\nLogistic Regression"}}
+        D1 --- D2
+        D1 --- D3
+    end
+
+    D --> E
+
+    subgraph E["4 · Clinical Risk Analysis"]
+        E1["Risk Probability → Risk Tier\nLow · Moderate · High"]
+        E2["Contributing Factor Evaluation\nGlucose · BMI · BP · Cholesterol …"]
+        E3["Recommendation Generator\n3-4 clinical action items"]
+        E1 --> E2 --> E3
+    end
+
+    E --> F(["📊 JSON Response\nrisk_percentage · risk_tier\nfactors · recommendations"])
+    F --> G(["🖥️ Animated Risk Gauge\n& Result Card"])
+```
+
+---
+
+### Pipeline 3 — Medical Imaging AI  *(X-Ray & Brain MRI)*
+
+Accepts arbitrary-resolution medical scan images and runs them through a standardised preprocessing pipeline before deep learning inference.
+
+```mermaid
+flowchart LR
+    A(["🖼️ Input\nChest X-Ray or Brain MRI\nany size / format"]) --> B
+
+    subgraph B["1 · Image Preprocessing\ntransform_image()"]
+        B1["EXIF Transpose\nOrientation correction"]
+        B2["Alpha / Transparency Handling\nComposite over black background"]
+        B3["Color Mode Normalisation\nAny mode → RGB"]
+        B4["High-Fidelity Resampling\nLanczos interpolation"]
+        B5["Float32 Normalisation\nPixel values → 0.0 – 1.0"]
+        B6["Batch Dimension Expand\nshape (1, H, W, 3)"]
+        B1 --> B2 --> B3 --> B4 --> B5 --> B6
+    end
+
+    B6 --> C
+
+    subgraph C["2 · Target Tensor Shape"]
+        C1{{"🩻 X-Ray\n(1, 224, 224, 3)"}}
+        C2{{"🧠 Brain MRI\n(1, 299, 299, 3)"}}
+    end
+
+    C --> D
+
+    subgraph D["3 · Deep Learning Inference"]
+        D1{{"🩻 Chest X-Ray CNN\nSigmoid → Pneumonia Probability"}}
+        D2{{"🧠 Xception Transfer Learning\nSoftmax → 4-Class Probabilities"}}
+        C1 --> D1
+        C2 --> D2
+    end
+
+    D --> E
+
+    subgraph E["4 · Result Interpretation"]
+        E1["X-Ray: Pneumonia / Normal\nConfidence %"]
+        E2["MRI: Glioma · Meningioma\nPituitary · No Tumor\nPer-class probability breakdown"]
+        D1 --> E1
+        D2 --> E2
+    end
+
+    E --> F(["📋 JSON Response\ndiagnosis · confidence\nclass_probabilities\nrecommendations"])
+    F --> G(["🖥️ Visual Diagnosis Card\n& Probability Bars"])
+```
+
+---
+
 ## 📂 Project Structure
 
 ```
