@@ -1,9 +1,31 @@
-# Python
+# Byte-compiled / optimized / ambient files
 __pycache__/
 *.py[cod]
 *$py.class
 
-# Environments
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
 .env
 .venv
 env/
@@ -12,23 +34,28 @@ ENV/
 env.bak/
 venv.bak/
 
-# Streamlit
-.streamlit/
-
-# IDEs
+# Operating System & IDEs
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
 .vscode/
 .idea/
 
-# OS
-.DS_Store
+# Large Datasets (>100MB raw image dumps)
+datasets/brain tumor/
+datasets/chest_xray/
+
+# Large Model Weights exceeding GitHub's 100MB limit
+# (Downloadable via Kaggle/Drive notebooks as documented)
+models/brain_tumor_model/*.keras
+models/Eye-model/*91.94.h5
+*.zip
+*.tar.gz
+*.h5.zip
 
 # Logs
 *.log
-datasets/
-
-# Node / Frontend
-node_modules/
-dist/
-
-# Models (Ignored due to size, handled via GDrive download)
-models/brain_tumor_model.keras
