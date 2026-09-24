@@ -1,83 +1,77 @@
-# Module M2: Coronary Heart Disease Prediction (Random Forest & Logistic Regression)
+# Module M2: Coronary Heart Disease Prediction (Random Forest)
 
 ## 1. Module Overview
 - **Module ID**: `M2`
-- **Clinical Specialty**: Cardiology / Cardiovascular Medicine
-- **Diagnostic Task**: Binary Classification (Heart Disease Presence vs. Absence)
-- **Input Modality**: Tabular Cardiovascular Biomarkers & Stress Test Parameters
-- **Associated Notebook**: [`notebooks/Final_Heart_Disease_Prediction.ipynb`](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Heart_Disease_Prediction.ipynb)
+- **Clinical Specialty**: Cardiology
+- **Diagnostic Task**: Binary Classification (Presence vs. Absence of Heart Disease)
+- **Input Modality**: Tabular Cardiovascular Parameters (13 clinical indicators)
+- **Associated Notebook**: [`notebooks/Final_Heart_Disease_Prediction.ipynb`](../notebooks/Final_Heart_Disease_Prediction.ipynb)
 - **Production Artifacts**: `models/heart_model/heart_model.pkl`, `models/heart_model/heart_scaler.pkl`
+- **Downloadable Bundle**: `heart_artifacts.zip`
 
 ---
 
 ## 2. Clinical Significance & Problem Formulation
-Cardiovascular diseases (CVDs) remain the leading cause of global mortality. Coronary heart disease involves impaired myocardial perfusion due to atherosclerotic plaque accumulation in coronary arteries. Diagnostic evaluation combines hemodynamic indicators (blood pressure, resting heart rate), serum lipid profiles (cholesterol), electrocardiographic findings (ST-segment depression, slope), and symptoms of exercise-induced angina.
-
-This module models these multivariate clinical features to estimate the probability of coronary artery pathology and pinpoint hemodynamic risk factors.
+Coronary artery disease (CAD) remains the leading cause of global mortality. Early non-invasive risk assessment using resting electrocardiography, hemodynamic parameters, and exercise stress biomarkers allows clinicians to initiate preventative therapies before major adverse cardiac events (MACE) occur.
 
 ---
 
 ## 3. Dataset & Clinical Parameters
 - **Source**: Cleveland Heart Disease Database (`datasets/heart.csv`)
-- **Target Variable**: `target` (0 = Disease Absent, 1 = Disease Present)
-- **Features (13 Clinical Parameters)**:
-  1. `age`: Patient age in years
-  2. `sex`: Sex (1 = male, 0 = female)
-  3. `cp`: Chest pain type (0: typical angina, 1: atypical angina, 2: non-anginal pain, 3: asymptomatic)
-  4. `trestbps`: Resting blood pressure on hospital admission (mm Hg)
-  5. `chol`: Serum cholesterol in mg/dL
+- **Cohort Size**: 303 patient records
+- **Target Variable**: `target` (0 = No Disease, 1 = Presence of Heart Disease)
+- **Clinical Indicators**:
+  1. `age`: Patient age (years)
+  2. `sex`: Biological sex (1 = male, 0 = female)
+  3. `cp`: Chest pain type (typical angina, atypical angina, non-anginal, asymptomatic)
+  4. `trestbps`: Resting blood pressure (mm Hg on admission)
+  5. `chol`: Serum cholesterol (mg/dL)
   6. `fbs`: Fasting blood sugar > 120 mg/dL (1 = true, 0 = false)
-  7. `restecg`: Resting electrocardiographic results (0: normal, 1: ST-T wave abnormality, 2: left ventricular hypertrophy)
-  8. `thalach`: Maximum heart rate achieved during exercise stress test
+  7. `restecg`: Resting electrocardiographic results (0 = normal, 1 = ST-T wave abnormality, 2 = LVH)
+  8. `thalach`: Maximum heart rate achieved during exercise stress testing
   9. `exang`: Exercise-induced angina (1 = yes, 0 = no)
   10. `oldpeak`: ST depression induced by exercise relative to rest
-  11. `slope`: Slope of the peak exercise ST segment (0: upsloping, 1: flat, 2: downsloping)
+  11. `slope`: Slope of the peak exercise ST segment
   12. `ca`: Number of major vessels (0–3) colored by fluoroscopy
-  13. `thal`: Thalassemia defect status (1: normal, 2: fixed defect, 3: reversible defect)
+  13. `thal`: Thalassemia scintigraphy (normal, fixed defect, reversible defect)
 
 ---
 
-## 4. Data Preprocessing Pipeline
-1. **Feature-Target Separation**: Isolates target variable `target` from clinical feature matrix $X \in \mathbb{R}^{N \times 13}$.
-2. **Feature Standardization**:
-   - Continuous physiological variables (`trestbps`, `chol`, `thalach`, `oldpeak`, `age`) span vastly different scales.
-   - All features are standardized via `StandardScaler()`:
-     $$z = \frac{x - \mu}{\sigma}$$
-3. **Train-Test Partitioning**:
-   - Divided using an 80:20 stratified split (`test_size=0.2, random_state=42`).
+## 4. Model Architecture & Hyperparameters
+- **Classifier**: Random Forest (`RandomForestClassifier`)
+- **Configuration**:
+  - `n_estimators`: 100 decision trees
+  - `criterion`: Gini impurity
+  - `random_state`: 42
+  - Feature normalization via `StandardScaler()`
 
 ---
 
-## 5. Model Architecture & Hyperparameters
-- **Primary Architecture**: Random Forest Classifier (`RandomForestClassifier`)
-- **Key Parameters**:
-  - `n_estimators=100`: 100 decorrelated decision trees built via bootstrap aggregation.
-  - `criterion='gini'`: Gini impurity criterion for optimal branch splits.
-  - `random_state=42`: Fixed seed ensuring reproducible split and feature subsampling.
-- **Alternative / Baseline Models**:
-  - Logistic Regression with $L2$ regularization for direct coefficient interpretability.
+## 5. Empirical Evaluation & Benchmark Results
+
+### 📊 Performance Summary
+- **Training Accuracy**: **100.0%**
+- **Test Accuracy**: **85.25%**
+
+### 📋 Classification Report (Test Set: 61 Samples)
+| Class | Precision | Recall | F1-Score | Support |
+| :--- | :---: | :---: | :---: | :---: |
+| **0 (No Disease)** | 0.86 | 0.83 | 0.84 | 29 |
+| **1 (Heart Disease)** | 0.85 | 0.88 | 0.86 | 32 |
+| **Macro Average** | 0.85 | 0.85 | 0.85 | 61 |
+| **Weighted Average** | 0.85 | 0.85 | 0.85 | 61 |
+
+### 🔲 Confusion Matrix
+```
+                  Predicted No Disease    Predicted Heart Disease
+Actual No Disease          24                        5
+Actual Heart Disease        4                       28
+```
 
 ---
 
-## 6. Evaluation & Results
-- **Training Accuracy**: ~100.0% (fully fit ensemble trees)
-- **Test Set Accuracy**: ~85.2% – 88.5%
-- **Sensitivity & Specificity**: High discriminative capacity for identifying patients with critical ST depression and fluoroscopy-confirmed vessel occlusions.
-- **Verification Routine**: Includes a post-serialization cell verifying inference execution using `pickle.load` on random test vectors.
-
----
-
-## 7. Explainability & Evidence Fusion in MedAgent
-- **Feature Importance & SHAP**:
-  - `cp` (chest pain type), `thalach` (maximum heart rate), `oldpeak` (ST depression), and `ca` (colored vessels) emerge as the dominant predictive drivers.
-- **LIME Explanations**: Generates local linear surrogates explaining why specific threshold combinations (e.g., age > 55, exercise angina present, oldpeak > 2.0) triggered a high-risk warning.
+## 6. Explainability & Evidence Fusion in MedSynapse
+- **TreeSHAP Attributions**: Primary risk drivers identified as `cp` (chest pain category), `thalach` (max heart rate), `oldpeak` (ST depression), and `ca` (fluoroscopy vessels).
 - **Cross-Module Reasoning**:
-  - `M2 + M1 (Diabetes)`: Cardiovascular risk is modulated when diabetic biomarkers indicate microvascular strain.
-  - `M2 + M6 (Liver)`: Monitors lipid and metabolic enzyme relationships in chronic systemic inflammation.
-
----
-
-## 8. Artifacts & Model Persistence
-- Production Weights: `models/heart_model/heart_model.pkl`
-- Preprocessing Scaler: `models/heart_model/heart_scaler.pkl`
-- Kaggle Download Bundle: One-click bundle generated via `heart_artifacts.zip`.
+  - `M2 + M1 (Diabetes)`: Cardiovascular risk is modulated upward in the presence of metabolic dysfunction.
+  - `M2 + M7 (Kidney)`: Evaluates Cardio-Renal Metabolic Syndrome (CRMS) when renal and cardiac strain markers co-occur.
