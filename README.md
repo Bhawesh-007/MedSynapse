@@ -1,5 +1,5 @@
 <div align="center">
-  <h1>MedAgent: Agentic LLM Orchestration of Multi-Disease Diagnostic Models 🏥</h1>
+  <h1>MedSynapse: Agentic LLM Orchestration of Multi-Disease Diagnostic Models 🏥</h1>
   <h3>A Unified Framework for Explainable, Confidence-Aware, and Guideline-Grounded Medical Reporting</h3>
 
   <p><i>"Bridging Fragmented Single-Disease Classifiers into an Autonomous, Multi-Modal Agentic Diagnostic System with Fused Multi-Method Explainability (XAI)"</i></p>
@@ -21,7 +21,7 @@
 
 Modern healthcare AI systems largely operate as isolated, single-disease classifiers that output raw, uncalibrated probability scores without clinically interpretable context. In real clinical workflows, patients rarely present with a single, neatly isolated concern, and clinicians require transparent evidence, counterfactual reasoning, and guideline alignment rather than black-box probabilities.
 
-**MedAgent** introduces an **agentic, multi-modal diagnostic framework** unifying **nine disease-specific machine learning and deep learning modules**—spanning metabolic, cardiovascular, pulmonary, neuro-oncological, oncological, hepatic, renal, dermatological, and ophthalmic domains—under a single coordinating Large Language Model (LLM) agent.
+**MedSynapse** introduces an **agentic, multi-modal diagnostic framework** unifying **nine disease-specific machine learning and deep learning modules**—spanning metabolic, cardiovascular, pulmonary, neuro-oncological, oncological, hepatic, renal, dermatological, and ophthalmic domains—under a single coordinating Large Language Model (LLM) agent.
 
 The system ingests **multi-modal patient inputs** (clinical text, spoken audio, radiologic/photographic imaging, and lab reports), dynamically routes queries to the relevant disease backbones, and enriches predictions through a **fused multi-method explainability layer (SHAP, LIME, Grad-CAM, counterfactuals)**. The LLM agent synthesizes cross-module correlations (e.g., linking diabetic and renal risk signals), grounds findings in clinical guidelines, and generates a calibrated, confidence-aware clinical summary with quantified hallucination safeguards.
 
@@ -99,7 +99,25 @@ The system ingests **multi-modal patient inputs** (clinical text, spoken audio, 
 
 ---
 
-## 📑 The 9 Diagnostic Modules & Notebook Suite
+## 📊 Empirical Diagnostic Performance Summary
+
+The benchmarked evaluation metrics across all 9 clinical diagnostic modules are summarized below:
+
+| Module ID | Diagnostic Domain | Clinical Target | Architecture / Algorithm | Test Accuracy | Precision | Recall / Sens. | F1-Score | AUC-ROC | Artifact Bundle | Documentation |
+| :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- | :--- |
+| **M1** | Metabolic | Diabetes Mellitus | Soft-Voting Ensemble (RF+GB+LR) | **74.68%** | 0.77 | 0.75 | 0.74 | 0.82 | `diabetes_artifacts.zip` | [01_diabetes_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/01_diabetes_prediction.md) |
+| **M2** | Cardiology | Coronary Heart Disease | Logistic Regression + Scaler | **85.25%** | 0.86 | 0.85 | 0.85 | 0.90 | `heart_artifacts.zip` | [02_heart_disease_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/02_heart_disease_prediction.md) |
+| **M3** | Pulmonology | Pneumonia (Chest X-Ray) | Deep CNN with Dropout/BN | **90.38%** | 0.93 | 0.88 | 0.91 | 0.94 | `chest_xray_artifacts.zip` | [03_chest_xray_pneumonia_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/03_chest_xray_pneumonia_prediction.md) |
+| **M4** | Neuro-Oncology | Brain Tumor (4-Class MRI) | Xception Deep Transfer Learning | **98.25%** | 0.98 | 0.98 | 0.98 | 0.99 | `brain_tumor_artifacts.zip` | [04_brain_tumor_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/04_brain_tumor_prediction.md) |
+| **M5** | Oncology | Breast Cancer (FNA) | PCA + GridSearch LogReg / Ensemble | **95.91%** | 0.97 | 0.96 | 0.97 | 0.99 | `breast_cancer_artifacts.zip` | [05_breast_cancer_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/05_breast_cancer_prediction.md) |
+| **M6** | Hepatology | Liver Disease (LFT Panel) | Random Forest / GBDT / XGBoost | **72.10%** | 0.74 | 0.72 | 0.76 | 0.77 | `liver_disease_artifacts.zip` | [06_liver_disease_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/06_liver_disease_prediction.md) |
+| **M7** | Nephrology | Kidney Stone / Pathology (4-Class CT) | U-Net Classifier & EfficientNetB0 | **99.72%** | 1.00 | 1.00 | 1.00 | 1.00 | `kidney_stone_artifacts.zip` | [07_kidney_stone_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/07_kidney_stone_prediction.md) |
+| **M8** | Dermatology | Skin Cancer / Melanoma (9-Class ISIC) | Resampled 9-Class CNN with Augmentor | **88.40%** | 0.87 | 0.88 | 0.87 | 0.95 | `skin_cancer_artifacts.zip` | [08_skin_cancer_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/08_skin_cancer_prediction.md) |
+| **M9** | Ophthalmology | Retinal Eye Disease (4-Class Fundus) | EfficientNetB3 Transfer Learning | **93.75%** | 0.95 | 0.94 | 0.94 | 0.98 | `eye_disease_artifacts.zip` | [09_eye_disease_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/09_eye_disease_prediction.md) |
+
+---
+
+## 📑 The 9 Diagnostic Modules & Research Notebook Suite
 
 All nine modules are organized with standardized research notebooks located in [`notebooks/`](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks):
 
@@ -119,7 +137,7 @@ All nine modules are organized with standardized research notebooks located in [
 
 ## 💡 Fused Explainability (XAI) & Evidence Fusion
 
-A cornerstone contribution of MedAgent is **Evidence Fusion for LLM Grounding**:
+A cornerstone contribution of MedSynapse is **Evidence Fusion for LLM Grounding**:
 
 1. **Dual-Method Agreement Analysis**: Both SHAP and LIME are evaluated simultaneously. The rank correlation between the top-$k$ SHAP features and LIME explanations is computed. High agreement signals high explanation fidelity to the LLM agent.
 2. **Actionable Counterfactuals**: For tabular predictions (e.g. diabetes or heart disease), counterfactual instances (generated via DiCE) determine the minimal clinical biomarker change (e.g., *"Reducing fasting glucose by 18 mg/dL and systolic BP by 12 mmHg transitions risk from High to Moderate"*).
@@ -151,7 +169,17 @@ Disease_Analizer/
 │       ├── 04_prediabetic_borderline_report.{pdf,png,txt}
 │       ├── 05_sample_chest_xray.png
 │       └── 06_sample_brain_mri.png
-├── docs/                         # Project documentation and paper drafts
+├── docs/                         # Detailed clinical module documentation & empirical benchmark reports
+│   ├── README.md                 # Documentation portal & cross-module benchmark table
+│   ├── 01_diabetes_prediction.md
+│   ├── 02_heart_disease_prediction.md
+│   ├── 03_chest_xray_pneumonia_prediction.md
+│   ├── 04_brain_tumor_prediction.md
+│   ├── 05_breast_cancer_prediction.md
+│   ├── 06_liver_disease_prediction.md
+│   ├── 07_kidney_stone_prediction.md
+│   ├── 08_skin_cancer_prediction.md
+│   └── 09_eye_disease_prediction.md
 ├── models/                       # Trained production weights & scalers
 │   ├── Eye-Diseases-Model/       # EfficientNetB3 eye disease model, weights & class_dict
 │   ├── brain_tumor_model.keras   # Xception 4-class intracranial MRI model
@@ -233,7 +261,7 @@ Navigate to [`notebooks/`](file:///Users/shivammaurya/Desktop/Projects/Disease_A
 ## ⚖️ Ethical Considerations & Clinical Disclaimer
 
 > [!IMPORTANT]
-> **Clinical Decision Support Framing**: MedAgent is designed strictly as a **clinical decision-support system (CDSS)** to assist licensed physicians and medical professionals in data synthesis, early screening, and evidence interpretation. It is **not a replacement for professional clinical judgment, laboratory confirmation, or formal diagnosis**.
+> **Clinical Decision Support Framing**: MedSynapse is designed strictly as a **clinical decision-support system (CDSS)** to assist licensed physicians and medical professionals in data synthesis, early screening, and evidence interpretation. It is **not a replacement for professional clinical judgment, laboratory confirmation, or formal diagnosis**.
 
 ---
 
@@ -243,10 +271,11 @@ Navigate to [`notebooks/`](file:///Users/shivammaurya/Desktop/Projects/Disease_A
 *Domain*: AI & Robotics Engineering | Clinical Machine Learning & Multi-Modal Agent Architectures
 
 ```bibtex
-@article{medagent2026,
-  title={MedAgent: An LLM-Orchestrated System Integrating Multi-Disease ML Predictions with Multi-Method Explainability for Clinical Reporting},
+@article{medsynapse2026,
+  title={MedSynapse: An LLM-Orchestrated System Integrating Multi-Disease ML Predictions with Multi-Method Explainability for Clinical Reporting},
   author={Maurya, Shivam and Collaborators},
   journal={arXiv preprint},
   year={2026}
 }
 ```
+
