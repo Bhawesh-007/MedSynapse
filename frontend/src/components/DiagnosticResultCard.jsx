@@ -137,7 +137,7 @@ export default function DiagnosticResultCard({
       <div className="break-inside-avoid" style={{ margin: '1rem 0' }}>
         <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.85rem' }}>
           <tbody>
-            <tr style={{ backgroundColor: 'rgba(30, 41, 59, 0.4)' }}>
+            <tr style={{ backgroundColor: '#f5faf6' }}>
               <td style={{ width: '22%', fontWeight: 700, color: 'var(--text-muted)' }}>Diagnostic Scope:</td>
               <td style={{ width: '28%', fontWeight: 600, color: '#ffffff' }}>{title}</td>
               <td style={{ width: '22%', fontWeight: 700, color: 'var(--text-muted)' }}>Modality / Engine:</td>
@@ -191,7 +191,7 @@ export default function DiagnosticResultCard({
           )}
         </div>
 
-        <div style={{ textAlign: 'center', padding: '10px 20px', backgroundColor: 'rgba(15, 23, 42, 0.6)', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
+        <div style={{ textAlign: 'center', padding: '10px 20px', backgroundColor: '#ffffff', borderRadius: '8px', border: '1px solid #d7e7db' }}>
           <div style={{ fontSize: '1.85rem', fontWeight: 900, fontFamily: 'var(--font-mono)', color: riskColor }}>
             {riskPercent}%
           </div>
@@ -329,4 +329,3 @@ export default function DiagnosticResultCard({
     </div>
   );
 }
-

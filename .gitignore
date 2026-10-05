@@ -26,6 +26,10 @@ venv.bak/
 *.log
 datasets/
 
+# Local clinical feature store (contains sensitive extracted evidence)
+data/medsynapse.db
+data/medsynapse.db-*
+
 # Node / Frontend
 node_modules/
 dist/

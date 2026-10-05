@@ -15,17 +15,27 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 try:
+    from backend.database import initialize_database, load_model_features, save_feature_extraction
     from backend.services.ocr_service import MedicalOCREngine
     from backend.services.model_service import ModelService
+    from backend.services.gemma_service import GemmaService, GemmaServiceError
 except ImportError:
+    from database import initialize_database, load_model_features, save_feature_extraction
     from services.ocr_service import MedicalOCREngine
     from services.model_service import ModelService
+    from services.gemma_service import GemmaService, GemmaServiceError
 
 app = FastAPI(
     title="MedSynapse Clinical Diagnostic API",
     description="AI-driven multi-disease diagnostics with automated OCR medical report parameter extraction.",
     version="2.0.0"
 )
+
+
+@app.on_event("startup")
+def initialize_feature_database() -> None:
+    """Ensure the local feature-evidence store exists before serving requests."""
+    initialize_database()
 
 # Enable CORS for frontend development
 app.add_middleware(
@@ -37,6 +47,7 @@ app.add_middleware(
 )
 
 model_service = ModelService.get_instance()
+gemma_service = GemmaService()
 
 # Pydantic Schemas
 class DiabetesInput(BaseModel):
@@ -187,7 +198,7 @@ async def parse_medical_report(
             }
 
         parsed_data = MedicalOCREngine.parse_report_parameters(extracted_text, disease_type)
-        return {
+        response = {
             "success": True,
             "filename": filename,
             "raw_text": parsed_data["raw_text"],
@@ -196,6 +207,33 @@ async def parse_medical_report(
             "parameters": parsed_data["parameters"],
             "ready_inputs": parsed_data["ready_inputs"]
         }
+        # Existing OCR and regex extraction remain the first stage. Gemma only
+        # consumes the OCR text afterwards and returns separately auditable
+        # diabetes evidence; it does not overwrite the OCR response.
+        if disease_type.lower() in {"all", "diabetes"}:
+            try:
+                response["gemma_diabetes"] = gemma_service.extract_diabetes_features(extracted_text)
+            except GemmaServiceError as exc:
+                response["gemma_diabetes"] = {
+                    "status": "unavailable",
+                    "message": str(exc),
+                    "features": {},
+                    "missing_or_unverified": [],
+                    "model_features": None,
+                }
+            gemma_result = response["gemma_diabetes"]
+            response["feature_extraction_id"] = save_feature_extraction(
+                disease_type="diabetes",
+                source_filename=filename,
+                report_text=extracted_text,
+                features={
+                    "ocr_parameters": parsed_data["parameters"],
+                    "gemma_features": gemma_result["features"],
+                },
+                model_features=gemma_result["model_features"],
+                extraction_status=gemma_result["status"],
+            )
+        return response
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"OCR processing failed: {str(e)}")
@@ -209,6 +247,27 @@ def predict_diabetes_risk(payload: DiabetesInput):
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Diabetes prediction failed: {str(e)}")
+
+
+@app.post("/api/predict/diabetes/from-feature-store/{feature_extraction_id}")
+def predict_diabetes_from_feature_store(feature_extraction_id: str):
+    """Predict from validated diabetes features persisted after OCR/Gemma extraction."""
+    try:
+        model_features = load_model_features(feature_extraction_id, "diabetes")
+        result = model_service.predict_diabetes_from_feature_store(model_features)
+        return {
+            "success": True,
+            "data": result,
+            "feature_extraction_id": feature_extraction_id,
+            "feature_source": "local_database",
+        }
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Diabetes prediction failed: {str(exc)}") from exc
 
 
 @app.post("/api/predict/heart")

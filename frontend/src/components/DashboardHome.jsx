@@ -65,8 +65,7 @@ export default function DashboardHome({ setTab, onSelectSample }) {
         style={{
           padding: '2.5rem',
           position: 'relative',
-          overflow: 'hidden',
-          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(30, 41, 59, 0.7))'
+          overflow: 'hidden'
         }}
       >
         <div style={{ position: 'relative', zIndex: 2, maxWidth: '780px' }}>
@@ -158,7 +157,6 @@ export default function DashboardHome({ setTab, onSelectSample }) {
                       width: '46px',
                       height: '46px',
                       borderRadius: '12px',
-                      backgroundColor: 'rgba(15, 23, 42, 0.7)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -183,7 +181,6 @@ export default function DashboardHome({ setTab, onSelectSample }) {
                 <div>
                   <div style={{
                     padding: '8px 12px',
-                    backgroundColor: 'rgba(15, 23, 42, 0.5)',
                     borderRadius: '8px',
                     fontSize: '0.75rem',
                     color: 'var(--text-muted)',

@@ -62,6 +62,17 @@ class CustomUnpickler(pickle.Unpickler):
 np_pickle.__bit_generator_ctor = compat_ctor
 np_pickle.__randomstate_ctor = compat_randomstate_ctor
 
+DATABASE_DIABETES_FEATURE_ORDER = (
+    'Pregnancies',
+    'Glucose',
+    'BloodPressure',
+    'SkinThickness',
+    'Insulin',
+    'BMI',
+    'Age',
+    'BMI_Cat',
+)
+
 
 class ModelService:
     _instance = None
@@ -167,6 +178,83 @@ class ModelService:
             'risk_tier': 'High Risk' if risk_probability >= 0.65 else ('Moderate Risk' if risk_probability >= 0.35 else 'Low Risk'),
             'contributing_factors': factors,
             'recommendations': recommendations
+        }
+
+    def predict_diabetes_from_feature_store(self, model_features: dict) -> dict:
+        """Run diabetes inference using only the validated database feature set.
+
+        A legacy nine-feature artifact is refused rather than receiving an
+        invented DPF value. Install the DPF-free eight-feature artifact before
+        enabling this endpoint in production.
+        """
+        model, scaler = self.get_diabetes_model()
+        expected_feature_count = getattr(scaler, 'n_features_in_', None)
+        if expected_feature_count != len(DATABASE_DIABETES_FEATURE_ORDER):
+            raise ValueError(
+                "The installed diabetes artifact requires "
+                f"{expected_feature_count} features, including DiabetesPedigreeFunction. "
+                "It cannot use the DPF-free local feature store. Install the retrained 8-feature artifact first."
+            )
+
+        missing = [name for name in DATABASE_DIABETES_FEATURE_ORDER if name not in model_features]
+        if missing:
+            raise ValueError(f"Stored diabetes features are missing: {', '.join(missing)}")
+        try:
+            input_arr = np.array([[
+                float(model_features[name]) for name in DATABASE_DIABETES_FEATURE_ORDER
+            ]])
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Stored diabetes features must all be finite numeric values.") from exc
+        if not np.isfinite(input_arr).all():
+            raise ValueError("Stored diabetes features must all be finite numeric values.")
+
+        scaled_input = scaler.transform(input_arr)
+        prediction = int(model.predict(scaled_input)[0])
+        probabilities = model.predict_proba(scaled_input)[0]
+        risk_probability = float(probabilities[1])
+        glucose = float(model_features['Glucose'])
+        bmi = float(model_features['BMI'])
+        insulin = float(model_features['Insulin'])
+        blood_pressure = float(model_features['BloodPressure'])
+        factors = []
+        if glucose >= 126:
+            factors.append({'factor': 'Fasting Glucose', 'value': f"{glucose} mg/dL", 'impact': 'High (Diabetic threshold exceeded)'})
+        elif glucose >= 100:
+            factors.append({'factor': 'Fasting Glucose', 'value': f"{glucose} mg/dL", 'impact': 'Moderate (Impaired fasting glucose)'})
+        if bmi >= 30:
+            factors.append({'factor': 'Body Mass Index', 'value': f"{bmi} kg/m²", 'impact': 'High (Obesity Class I+)'})
+        elif bmi >= 25:
+            factors.append({'factor': 'Body Mass Index', 'value': f"{bmi} kg/m²", 'impact': 'Moderate (Overweight)'})
+        if insulin > 166:
+            factors.append({'factor': 'Serum Insulin', 'value': f"{insulin} μU/mL", 'impact': 'High (Possible Insulin Resistance)'})
+        if blood_pressure >= 85:
+            factors.append({'factor': 'Diastolic BP', 'value': f"{blood_pressure} mm Hg", 'impact': 'Elevated vascular tension'})
+        if not factors:
+            factors.append({'factor': 'Metabolic Profile', 'value': 'Optimal', 'impact': 'Parameters within standard baseline'})
+
+        recommendations = (
+            [
+                "Schedule a clinical consultation for oral glucose tolerance test (OGTT) and HbA1c screening.",
+                "Adopt a low-glycemic dietary regimen rich in soluble fiber and lean protein.",
+                "Engage in at least 150 minutes per week of moderate-intensity aerobic and resistance exercise.",
+                "Monitor self-monitored blood glucose levels (fasting and 2-hr postprandial).",
+            ]
+            if risk_probability >= 0.5
+            else [
+                "Maintain a balanced, nutrient-dense diet and stay physically active.",
+                "Undergo routine annual wellness and preventative metabolic screenings.",
+                "Keep body mass index (BMI) within the healthy range (18.5 - 24.9 kg/m²).",
+            ]
+        )
+        return {
+            'disease': 'Diabetes Mellitus',
+            'prediction': prediction,
+            'has_disease': bool(prediction == 1),
+            'risk_probability': round(risk_probability, 4),
+            'risk_percentage': round(risk_probability * 100, 1),
+            'risk_tier': 'High Risk' if risk_probability >= 0.65 else ('Moderate Risk' if risk_probability >= 0.35 else 'Low Risk'),
+            'contributing_factors': factors,
+            'recommendations': recommendations,
         }
 
     # 2. Heart Disease Model

@@ -108,7 +108,7 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
                 textAlign: 'left',
                 padding: '10px 14px',
                 border: selectedSampleId === s.id ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.1)',
-                backgroundColor: selectedSampleId === s.id ? 'rgba(14, 165, 233, 0.15)' : 'rgba(30, 41, 59, 0.6)'
+                backgroundColor: selectedSampleId === s.id ? '#e6f4e9' : '#ffffff'
               }}
             >
               <FileText size={16} color="#38bdf8" style={{ flexShrink: 0 }} />
@@ -312,7 +312,7 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
                 key={key}
                 style={{
                   padding: '14px',
-                  backgroundColor: 'rgba(30, 41, 59, 0.6)',
+                  backgroundColor: '#f5faf6',
                   borderRadius: '12px',
                   border: '1px solid rgba(255, 255, 255, 0.08)',
                   display: 'flex',
@@ -348,7 +348,7 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
                 )}
 
                 {item.matched_text && (
-                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', backgroundColor: 'rgba(15, 23, 42, 0.5)', padding: '4px 6px', borderRadius: '4px', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', backgroundColor: '#eef7f0', padding: '4px 6px', borderRadius: '4px', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     Match: "{item.matched_text}"
                   </div>
                 )}
