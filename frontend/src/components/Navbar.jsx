@@ -3,12 +3,12 @@ import { Activity, FileText, Heart, Droplets, Scan, Brain, CheckCircle2, AlertCi
 
 export default function Navbar({ currentTab, setTab, systemStatus, onRefreshStatus }) {
   const tabs = [
-    { id: 'home', label: 'Dashboard Hub', icon: Activity },
-    { id: 'ocr', label: 'Smart Report OCR', icon: FileText, highlight: true },
-    { id: 'diabetes', label: 'Diabetes Engine', icon: Droplets, color: '#f43f5e' },
-    { id: 'heart', label: 'Cardiac Health', icon: Heart, color: '#ef4444' },
-    { id: 'xray', label: 'Pneumonia X-Ray', icon: Scan, color: '#38bdf8' },
-    { id: 'mri', label: 'Brain Tumor MRI', icon: Brain, color: '#c084fc' },
+    { id: 'home', label: 'Dashboard Hub', icon: Activity, color: '#25854a' },
+    { id: 'ocr', label: 'Smart Report OCR', icon: FileText, highlight: true, color: '#25854a' },
+    { id: 'diabetes', label: 'Diabetes Engine', icon: Droplets, color: '#b42318' },
+    { id: 'heart', label: 'Cardiac Health', icon: Heart, color: '#c81e1e' },
+    { id: 'xray', label: 'Pneumonia X-Ray', icon: Scan, color: '#287a89' },
+    { id: 'mri', label: 'Brain Tumor MRI', icon: Brain, color: '#e08d73' },
   ];
 
   const isOnline = systemStatus?.status === 'online';
@@ -18,9 +18,9 @@ export default function Navbar({ currentTab, setTab, systemStatus, onRefreshStat
       position: 'sticky',
       top: 0,
       zIndex: 50,
-      backgroundColor: 'rgba(10, 15, 29, 0.85)',
-      backdropFilter: 'blur(20px)',
-      borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
+      backgroundColor: 'rgba(255, 255, 255, 0.96)',
+      backdropFilter: 'blur(12px)',
+      borderBottom: '1px solid #d7e7db',
       padding: '0.75rem 1.5rem',
       display: 'flex',
       alignItems: 'center',
@@ -43,18 +43,18 @@ export default function Navbar({ currentTab, setTab, systemStatus, onRefreshStat
           width: '42px',
           height: '42px',
           borderRadius: '12px',
-          background: 'linear-gradient(135deg, #0284c7, #0ea5e9)',
+          background: '#25854a',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          boxShadow: '0 0 20px rgba(14, 165, 233, 0.4)'
+          boxShadow: '0 4px 12px rgba(37, 133, 74, 0.18)'
         }}>
           <Activity size={24} color="#ffffff" strokeWidth={2.5} />
         </div>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.5px', color: '#ffffff' }}>
-              Med<span style={{ color: '#38bdf8' }}>Synapse</span>
+            <span style={{ fontSize: '1.25rem', fontWeight: 800, letterSpacing: '-0.5px', color: 'var(--text-primary)' }}>
+              Med<span style={{ color: '#25854a' }}>Synapse</span>
             </span>
             <span className="badge badge-cyan" style={{ fontSize: '0.65rem', padding: '2px 6px' }}>v2.0 AI</span>
           </div>
@@ -79,23 +79,23 @@ export default function Navbar({ currentTab, setTab, systemStatus, onRefreshStat
                 borderRadius: '10px',
                 fontSize: '0.875rem',
                 fontWeight: isActive ? 600 : 500,
-                color: isActive ? '#ffffff' : 'var(--text-secondary)',
-                backgroundColor: isActive ? 'rgba(14, 165, 233, 0.15)' : 'transparent',
-                border: isActive ? '1px solid rgba(14, 165, 233, 0.4)' : '1px solid transparent',
+                color: isActive ? '#1e6f3d' : 'var(--text-secondary)',
+                backgroundColor: isActive ? '#e6f4e9' : 'transparent',
+                border: isActive ? '1px solid #a7cfb0' : '1px solid transparent',
                 cursor: 'pointer',
                 transition: 'all 0.2s ease',
-                boxShadow: isActive ? '0 0 15px rgba(14, 165, 233, 0.2)' : 'none'
+                boxShadow: isActive ? '0 2px 8px rgba(37, 133, 74, 0.10)' : 'none'
               }}
             >
-              <Icon size={16} color={isActive ? '#38bdf8' : (t.color || 'var(--text-muted)')} />
+              <Icon size={16} color={t.color || 'var(--text-muted)'} />
               {t.label}
               {t.highlight && (
                 <span style={{
                   width: '6px',
                   height: '6px',
                   borderRadius: '50%',
-                  backgroundColor: '#38bdf8',
-                  boxShadow: '0 0 8px #38bdf8'
+                  backgroundColor: '#25854a',
+                  boxShadow: '0 0 6px rgba(37, 133, 74, 0.35)'
                 }} />
               )}
             </button>

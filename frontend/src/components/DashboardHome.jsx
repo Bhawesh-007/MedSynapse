@@ -1,5 +1,5 @@
 import React from 'react';
-import { Droplets, Heart, Scan, Brain, FileText, ArrowRight, Sparkles, Shield, Cpu, Zap, Activity } from 'lucide-react';
+import { Droplets, Heart, Scan, Brain, FileText, ArrowRight, Shield, Cpu, Zap } from 'lucide-react';
 
 export default function DashboardHome({ setTab, onSelectSample }) {
   const modules = [
@@ -11,9 +11,9 @@ export default function DashboardHome({ setTab, onSelectSample }) {
       badge: '98% Cross-Val Acc',
       badgeColor: 'badge-danger',
       icon: Droplets,
-      iconColor: '#f43f5e',
-      gradient: 'linear-gradient(135deg, rgba(244, 63, 94, 0.15), rgba(225, 29, 72, 0.05))',
-      borderColor: 'rgba(244, 63, 94, 0.3)',
+      iconColor: '#b42318',
+      gradient: '#f5faf6',
+      borderColor: '#bcd8c3',
       keyInputs: 'Glucose, Insulin, BMI, Blood Pressure, Age'
     },
     {
@@ -24,9 +24,9 @@ export default function DashboardHome({ setTab, onSelectSample }) {
       badge: 'Multi-Feature Scaled',
       badgeColor: 'badge-warning',
       icon: Heart,
-      iconColor: '#ef4444',
-      gradient: 'linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(185, 28, 28, 0.05))',
-      borderColor: 'rgba(239, 68, 68, 0.3)',
+      iconColor: '#c81e1e',
+      gradient: '#f5faf6',
+      borderColor: '#bcd8c3',
       keyInputs: 'Resting BP, Cholesterol, Max HR, Angina, ST Depression'
     },
     {
@@ -37,9 +37,9 @@ export default function DashboardHome({ setTab, onSelectSample }) {
       badge: 'Deep CNN Vision',
       badgeColor: 'badge-cyan',
       icon: Scan,
-      iconColor: '#38bdf8',
-      gradient: 'linear-gradient(135deg, rgba(56, 189, 248, 0.15), rgba(14, 165, 233, 0.05))',
-      borderColor: 'rgba(56, 189, 248, 0.3)',
+      iconColor: '#287a89',
+      gradient: '#f5faf6',
+      borderColor: '#bcd8c3',
       keyInputs: 'Chest Radiograph (JPEG, PNG, DICOM-derived)'
     },
     {
@@ -50,9 +50,9 @@ export default function DashboardHome({ setTab, onSelectSample }) {
       badge: '4-Class Differential',
       badgeColor: 'badge-purple',
       icon: Brain,
-      iconColor: '#c084fc',
-      gradient: 'linear-gradient(135deg, rgba(192, 132, 252, 0.15), rgba(147, 51, 234, 0.05))',
-      borderColor: 'rgba(192, 132, 252, 0.3)',
+      iconColor: '#e08d73',
+      gradient: '#f5faf6',
+      borderColor: '#bcd8c3',
       keyInputs: 'Cranial MRI Scan (Axial/Coronal T1/T2)'
     }
   ];
@@ -70,15 +70,8 @@ export default function DashboardHome({ setTab, onSelectSample }) {
         }}
       >
         <div style={{ position: 'relative', zIndex: 2, maxWidth: '780px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', padding: '4px 12px', borderRadius: '9999px', backgroundColor: 'rgba(14, 165, 233, 0.12)', border: '1px solid rgba(14, 165, 233, 0.3)', marginBottom: '1rem' }}>
-            <Sparkles size={14} color="#38bdf8" />
-            <span style={{ fontSize: '0.8rem', fontWeight: 600, color: '#7dd3fc', letterSpacing: '0.5px' }}>
-              NEXT-GEN MEDICAL DIAGNOSTICS & OCR PIPELINE
-            </span>
-          </div>
-
-          <h1 style={{ fontSize: '2.6rem', fontWeight: 800, lineHeight: 1.15, color: '#ffffff', letterSpacing: '-1px' }}>
-            Clinical AI Precision for <span style={{ background: 'linear-gradient(135deg, #38bdf8, #818cf8)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Multi-Disease Screening</span>
+          <h1 style={{ fontSize: '2.6rem', fontWeight: 800, lineHeight: 1.15, color: '#1b1b1b', letterSpacing: '-1px' }}>
+            Clinical AI Precision for <span>Multi-Disease Screening</span>
           </h1>
 
           <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', marginTop: '1rem', lineHeight: 1.6 }}>
@@ -94,15 +87,6 @@ export default function DashboardHome({ setTab, onSelectSample }) {
               <FileText size={18} />
               <span>Smart Lab Report OCR</span>
               <ArrowRight size={16} />
-            </button>
-
-            <button 
-              onClick={() => setTab('diabetes')} 
-              className="btn-secondary"
-              style={{ padding: '12px 20px', fontSize: '0.95rem' }}
-            >
-              <Activity size={18} color="#38bdf8" />
-              <span>Explore Disease Modules</span>
             </button>
           </div>
         </div>

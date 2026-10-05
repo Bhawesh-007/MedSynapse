@@ -83,8 +83,8 @@ export default function App() {
       {/* Footer */}
       <footer style={{
         marginTop: 'auto',
-        borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-        backgroundColor: 'rgba(10, 15, 29, 0.95)',
+        borderTop: '1px solid #d7e7db',
+        backgroundColor: '#ffffff',
         padding: '2rem 1.5rem',
         color: 'var(--text-muted)',
         fontSize: '0.85rem'
@@ -99,8 +99,8 @@ export default function App() {
           gap: '1rem'
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Activity size={18} color="#38bdf8" />
-            <span style={{ fontWeight: 700, color: '#ffffff' }}>MedSynapse Clinical Diagnostic System</span>
+            <Activity size={18} color="#25854a" />
+            <span style={{ fontWeight: 700, color: 'var(--text-primary)' }}>MedSynapse Clinical Diagnostic System</span>
             <span>• Developed by Team MedSynapse (Shivam Maurya)</span>
           </div>
 
