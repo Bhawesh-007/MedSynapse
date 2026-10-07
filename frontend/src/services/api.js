@@ -77,17 +77,52 @@ export async function predictXRay(file) {
   return await res.json();
 }
 
-export async function predictMRI(file) {
+export async function predictXRayFromFeatureStore(featureExtractionId) {
+  const res = await fetch(
+    `${API_BASE_URL}/api/predict/xray/from-feature-store/${encodeURIComponent(featureExtractionId)}`,
+    { method: 'POST' },
+  );
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Stored X-Ray analysis failed');
+  }
+  return await res.json();
+}
+
+async function predictImageModel(path, file, label) {
   const formData = new FormData();
   formData.append('file', file);
+  const res = await fetch(`${API_BASE_URL}${path}`, { method: 'POST', body: formData });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || `${label} failed`);
+  }
+  return await res.json();
+}
 
-  const res = await fetch(`${API_BASE_URL}/api/predict/mri`, {
-    method: 'POST',
-    body: formData,
+export function predictEye(file) {
+  return predictImageModel('/api/predict/eye', file, 'Eye disease analysis');
+}
+
+export async function predictBreastCancer(features) {
+  const res = await fetch(`${API_BASE_URL}/api/predict/breast-cancer`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ features }),
   });
   if (!res.ok) {
     const errorData = await res.json().catch(() => ({}));
-    throw new Error(errorData.detail || 'MRI analysis failed');
+    throw new Error(errorData.detail || 'Breast cancer analysis failed');
   }
-  return await res.json();
+  return res.json();
+}
+
+export async function generateClinicalNarrative(clinicalReport) {
+  const res = await fetch(`${API_BASE_URL}/api/reports/generate-narrative`, {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ report: clinicalReport }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Clinical narrative generation failed');
+  }
+  return res.json();
 }

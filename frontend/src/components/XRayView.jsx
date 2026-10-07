@@ -119,6 +119,9 @@ export default function XRayView() {
           <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
             Automated deep learning screening for acute pulmonary opacification and pneumonia consolidations.
           </p>
+          <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px' }}>
+            Feature extraction: the model uses a validated 224 × 224 normalized chest X-ray pixel tensor; text reports are not used as model inputs.
+          </p>
         </div>
       </div>
 

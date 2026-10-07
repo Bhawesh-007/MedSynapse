@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, FileText, Heart, Droplets, Scan, Brain, CheckCircle2, AlertCircle, RefreshCw } from 'lucide-react';
+import { Activity, FileText, Heart, Droplets, Scan, Eye, Ribbon, RefreshCw } from 'lucide-react';
 
 export default function Navbar({ currentTab, setTab, systemStatus, onRefreshStatus }) {
   const tabs = [
@@ -8,7 +8,8 @@ export default function Navbar({ currentTab, setTab, systemStatus, onRefreshStat
     { id: 'diabetes', label: 'Diabetes Engine', icon: Droplets, color: '#b42318' },
     { id: 'heart', label: 'Cardiac Health', icon: Heart, color: '#c81e1e' },
     { id: 'xray', label: 'Pneumonia X-Ray', icon: Scan, color: '#287a89' },
-    { id: 'mri', label: 'Brain Tumor MRI', icon: Brain, color: '#e08d73' },
+    { id: 'eye', label: 'Eye Disease', icon: Eye, color: '#6b46c1' },
+    { id: 'breast', label: 'Breast Cancer', icon: Ribbon, color: '#b83280' },
   ];
 
   const isOnline = systemStatus?.status === 'online';

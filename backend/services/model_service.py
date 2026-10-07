@@ -6,6 +6,7 @@ from PIL import Image
 import tensorflow as tf
 from numpy.random import MT19937, RandomState
 import numpy.random._pickle as np_pickle
+from backend.services.breast_feature_contract import BREAST_FEATURE_ORDER
 
 # Compatibility shims for Keras 3 layers
 class FixedFlatten(tf.keras.layers.Flatten):
@@ -86,7 +87,13 @@ class ModelService:
         self._heart_model = None
         self._heart_scaler = None
         self._xray_model = None
-        self._mri_model = None
+        # These slots are intentionally lazy-loaded. Add the trained artifacts
+        # later without changing the API or frontend integration:
+        # models/eye_disease.keras and models/breast_cancer.keras.
+        self._eye_model = None
+        self._breast_model = None
+        self._breast_scaler = None
+        self._breast_pca = None
 
     @classmethod
     def get_instance(cls):
@@ -343,7 +350,7 @@ class ModelService:
         Transforms any arbitrary input image (various sizes, aspect ratios, color modes, orientations)
         into the exact tensor shape and format required by deep learning models.
         
-        target_size: (width, height), e.g. (224, 224) for X-Ray, (299, 299) for MRI
+        target_size: (width, height), e.g. (224, 224) for X-Ray
         """
         if not image_bytes or len(image_bytes) == 0:
             raise ValueError("Input image bytes are empty.")
@@ -401,6 +408,31 @@ class ModelService:
         return img_tensor, metadata
 
     # 3. Chest X-Ray Model
+    def extract_pneumonia_image_features(self, image_bytes: bytes) -> tuple[np.ndarray, dict]:
+        """Build the exact image feature tensor required by the pneumonia CNN.
+
+        The deployed pneumonia model has no report-text feature interface. Its
+        model features are the complete normalized 224×224×3 pixel tensor.
+        Only non-identifying tensor summary statistics are returned in JSON;
+        the tensor itself stays in memory for inference and the original image
+        is retained in the local image feature store when requested.
+        """
+        image_tensor, preprocessing = self.transform_image(image_bytes, target_size=(224, 224))
+        pixels = image_tensor[0]
+        return image_tensor, {
+            "feature_type": "normalized_chest_xray_pixel_tensor",
+            "feature_count": int(pixels.size),
+            "tensor_shape": list(image_tensor.shape),
+            "preprocessing": preprocessing,
+            "pixel_summary": {
+                "mean": round(float(np.mean(pixels)), 6),
+                "standard_deviation": round(float(np.std(pixels)), 6),
+                "minimum": round(float(np.min(pixels)), 6),
+                "maximum": round(float(np.max(pixels)), 6),
+            },
+            "note": "The CNN consumes all normalized pixels, not the summary statistics.",
+        }
+
     def get_xray_model(self):
         if self._xray_model is None:
             model_path = os.path.join(self.models_dir, 'xrays_pneumonia.keras')
@@ -416,7 +448,8 @@ class ModelService:
 
     def predict_xray(self, image_bytes: bytes) -> dict:
         model = self.get_xray_model()
-        img_arr, transform_meta = self.transform_image(image_bytes, target_size=(224, 224))
+        img_arr, image_features = self.extract_pneumonia_image_features(image_bytes)
+        transform_meta = image_features["preprocessing"]
 
         preds = model.predict(img_arr, verbose=0)
         if len(preds[0]) > 1:
@@ -442,7 +475,24 @@ class ModelService:
                 "Maintain good respiratory hygiene and seasonal vaccinations."
             ]
 
+        factors = [
+            {
+                'factor': 'Pneumonia probability',
+                'value': f"{prob * 100:.1f}%",
+                'impact': 'Positive radiographic classification' if is_pneumonia else 'Below positive classification threshold'
+            }
+        ]
+
         return {
+            # Keep the same normalized prediction contract used by diabetes and
+            # cardiac inference so the shared diagnostic report works uniformly.
+            'disease': 'Pneumonia',
+            'prediction': int(is_pneumonia),
+            'has_disease': is_pneumonia,
+            'risk_probability': round(prob, 4),
+            'risk_percentage': round(prob * 100, 1),
+            'risk_tier': 'High Risk' if prob >= 0.65 else ('Moderate Risk' if prob >= 0.35 else 'Low Risk'),
+            'contributing_factors': factors,
             'modality': 'Chest Radiography (X-Ray)',
             'diagnosis': 'Pneumonia' if is_pneumonia else 'Normal (Clear Lungs)',
             'is_positive': is_pneumonia,
@@ -450,85 +500,131 @@ class ModelService:
             'confidence_percentage': round(confidence * 100, 1),
             'severity': 'Elevated Radiological Density' if is_pneumonia else 'Normal Pulmonary Clarity',
             'image_transformation': transform_meta,
+            'image_features': image_features,
             'recommendations': recommendations
         }
 
-    # 4. Brain Tumor MRI Model
-    def get_mri_model(self):
-        if self._mri_model is None:
-            model_path = os.path.join(self.models_dir, 'brain_tumor_model.keras')
-            if os.path.exists(model_path):
-                try:
-                    # Rebuild architecture directly for flawless Keras 3 forward-pass
-                    base_model = tf.keras.applications.Xception(weights=None, include_top=False, input_shape=(299, 299, 3), pooling='max')
-                    model = tf.keras.Sequential([
-                        base_model,
-                        FixedFlatten(),
-                        tf.keras.layers.Dropout(rate=0.3),
-                        tf.keras.layers.Dense(128, activation='relu'),
-                        tf.keras.layers.Dropout(rate=0.25),
-                        tf.keras.layers.Dense(4, activation='softmax')
-                    ])
-                    model.load_weights(model_path)
-                    self._mri_model = model
-                except Exception:
-                    custom_objects = {'Flatten': FixedFlatten, 'GlobalAveragePooling2D': FixedPooling}
-                    self._mri_model = tf.keras.models.load_model(model_path, compile=False, custom_objects=custom_objects)
-        return self._mri_model
-
-    def predict_mri(self, image_bytes: bytes) -> dict:
-        model = self.get_mri_model()
-        if model is None:
-            raise RuntimeError("Brain tumor model is not loaded.")
-
-        img_arr, transform_meta = self.transform_image(image_bytes, target_size=(299, 299))
-
-        # Use functional tensor call to avoid Keras 3 list-wrap bug
+    def _load_image_model(self, attribute_name: str, filename: str):
+        model = getattr(self, attribute_name)
+        if model is not None:
+            return model
+        model_path = os.path.join(self.models_dir, filename)
+        if not os.path.exists(model_path):
+            raise FileNotFoundError(
+                f"Model artifact not found: models/{filename}. "
+                f"Train/export the {filename.removesuffix('.keras')} model before inference."
+            )
+        custom_objects = {'Flatten': FixedFlatten, 'GlobalAveragePooling2D': FixedPooling}
         try:
-            preds_tensor = model(img_arr, training=False)
-            preds = preds_tensor.numpy()[0] if hasattr(preds_tensor, 'numpy') else np.array(preds_tensor)[0]
+            model = tf.keras.models.load_model(model_path, compile=False, custom_objects=custom_objects)
         except Exception:
-            preds = model.predict(img_arr, verbose=0)[0]
+            model = tf.keras.models.load_model(
+                model_path, compile=False, safe_mode=False, custom_objects=custom_objects
+            )
+        setattr(self, attribute_name, model)
+        return model
 
-        class_names = ['Glioma Tumor', 'Meningioma Tumor', 'No Tumor (Healthy)', 'Pituitary Tumor']
-        
-        pred_idx = int(np.argmax(preds))
-        pred_class = class_names[pred_idx]
-        confidence = float(preds[pred_idx])
+    def _predict_planned_image_model(self, image_bytes: bytes, *, model_attr: str,
+                                     artifact: str, disease: str, positive_label: str,
+                                     negative_label: str, target_size=(224, 224)) -> dict:
+        model = self._load_image_model(model_attr, artifact)
+        image_tensor, transform_meta = self.transform_image(image_bytes, target_size=target_size)
+        raw = np.asarray(model.predict(image_tensor, verbose=0))
+        scores = np.asarray(raw[0] if raw.ndim > 1 else raw, dtype=np.float32).reshape(-1)
+        if scores.size == 0:
+            raise ValueError(f"{disease} model returned an empty prediction.")
 
-        probabilities_dict = {
-            class_names[i]: round(float(preds[i]) * 100, 2)
-            for i in range(len(class_names))
-        }
-
-        has_tumor = (pred_idx != 2)
-        recommendations = []
-        if has_tumor:
-            recommendations = [
-                f"Urgent neurosurgical / neuro-oncological evaluation for confirmed {pred_class}.",
-                "Obtain contrast-enhanced volumetric MRI (T1+Gadolinium, T2/FLAIR) and MRS spectroscopy.",
-                "Multidisciplinary tumor board review for surgical planning, biopsy, or stereotactic radiosurgery."
-            ]
+        if scores.size == 1:
+            positive_probability = float(np.clip(scores[0], 0.0, 1.0))
+            probabilities = {negative_label: round(1.0 - positive_probability, 4),
+                             positive_label: round(positive_probability, 4)}
+            diagnosis = positive_label if positive_probability >= 0.5 else negative_label
+            confidence = positive_probability if diagnosis == positive_label else 1.0 - positive_probability
         else:
-            recommendations = [
-                "MRI scan shows no intracranial mass effect, abnormal contrast enhancement, or tumor pathology.",
-                "Continue follow-up if neurological symptoms (headaches, seizures, vision changes) warrant further investigation."
-            ]
-
-        descriptions = {
-            'Glioma Tumor': 'Intra-axial glial cell neoplasm requiring prompt neurological assessment.',
-            'Meningioma Tumor': 'Extra-axial tumor arising from the arachnoid layer of the meninges.',
-            'Pituitary Tumor': 'Adenoma localized to the sellar / pituitary gland region.',
-            'No Tumor (Healthy)': 'Normal cerebral anatomy without detectable neoplastic lesion.'
-        }
+            # Supports future softmax classifiers without requiring a frontend change.
+            if not np.isclose(float(scores.sum()), 1.0, atol=1e-3):
+                scores = np.exp(scores - np.max(scores))
+                scores = scores / scores.sum()
+            labels = [negative_label, positive_label] if scores.size == 2 else [f"Class {i}" for i in range(scores.size)]
+            probabilities = {label: round(float(score), 4) for label, score in zip(labels, scores)}
+            top_index = int(np.argmax(scores))
+            diagnosis = labels[top_index]
+            confidence = float(scores[top_index])
+            positive_probability = float(scores[1] if scores.size == 2 else confidence)
 
         return {
-            'modality': 'Brain Magnetic Resonance Imaging (MRI)',
-            'diagnosis': pred_class,
-            'has_tumor': has_tumor,
+            'disease': disease,
+            'diagnosis': diagnosis,
+            'is_positive': diagnosis == positive_label,
+            'risk_probability': round(positive_probability, 4),
+            'risk_percentage': round(positive_probability * 100, 1),
             'confidence_percentage': round(confidence * 100, 1),
-            'class_probabilities': probabilities_dict,
-            'description': descriptions.get(pred_class, 'Neurological scan analysis completed.'),
+            'class_probabilities': probabilities,
             'image_transformation': transform_meta,
-            'recommendations': recommendations
+            'model_status': 'artifact_loaded',
+            'recommendations': [
+                'This integrated output is for research workflow testing only.',
+                'Replace the placeholder class mapping with the labels used during training.',
+                'Have a qualified clinician review any result before taking action.',
+            ],
+        }
+
+    def predict_eye(self, image_bytes: bytes) -> dict:
+        return self._predict_planned_image_model(
+            image_bytes, model_attr='_eye_model', artifact='eye_disease.keras',
+            disease='Eye Disease', positive_label='Eye Disease Detected',
+            negative_label='No Eye Disease Detected'
+        )
+
+    def get_eye_model(self):
+        """Expose the active ocular CNN for Grad-CAM report explanations."""
+        return self._load_image_model('_eye_model', 'eye_disease.keras')
+
+    def get_breast_cancer_model(self):
+        if self._breast_model is None:
+            artifacts = {
+                'model': os.path.join(self.models_dir, 'breast_cancer_model.pkl'),
+                'scaler': os.path.join(self.models_dir, 'breast_cancer_scaler.pkl'),
+                'pca': os.path.join(self.models_dir, 'breast_cancer_pca.pkl'),
+            }
+            missing = [name for name, path in artifacts.items() if not os.path.exists(path)]
+            if missing:
+                raise FileNotFoundError(
+                    'Breast-cancer tabular artifacts are unavailable: ' + ', '.join(missing) +
+                    '. Train/export breast_cancer_model.pkl, breast_cancer_scaler.pkl, and breast_cancer_pca.pkl first.'
+                )
+            with open(artifacts['model'], 'rb') as handle:
+                self._breast_model = CustomUnpickler(handle).load()
+            with open(artifacts['scaler'], 'rb') as handle:
+                self._breast_scaler = pickle.load(handle)
+            with open(artifacts['pca'], 'rb') as handle:
+                self._breast_pca = pickle.load(handle)
+        return self._breast_model, self._breast_scaler, self._breast_pca
+
+    def predict_breast_cancer(self, model_features: dict) -> dict:
+        """Predict benign/malignant status from the exact 30 WDBC FNA features."""
+        missing = [name for name in BREAST_FEATURE_ORDER if name not in model_features]
+        if missing:
+            raise ValueError(f"Missing breast-cancer features: {', '.join(missing)}")
+        try:
+            values = np.array([[float(model_features[name]) for name in BREAST_FEATURE_ORDER]])
+        except (TypeError, ValueError) as exc:
+            raise ValueError('Breast-cancer features must be finite numeric values.') from exc
+        if not np.isfinite(values).all():
+            raise ValueError('Breast-cancer features must be finite numeric values.')
+        model, scaler, pca = self.get_breast_cancer_model()
+        transformed = pca.transform(scaler.transform(values))
+        prediction = int(model.predict(transformed)[0])
+        probabilities = model.predict_proba(transformed)[0]
+        malignant_probability = float(probabilities[1])
+        return {
+            'disease': 'Breast Cancer', 'prediction': prediction,
+            'diagnosis': 'Malignant' if prediction == 1 else 'Benign',
+            'is_positive': bool(prediction == 1),
+            'risk_probability': round(malignant_probability, 4),
+            'risk_percentage': round(malignant_probability * 100, 1),
+            'risk_tier': 'High Risk' if malignant_probability >= 0.65 else ('Moderate Risk' if malignant_probability >= 0.35 else 'Low Risk'),
+            'contributing_factors': [],
+            'recommendations': ['This research screening output requires qualified clinician review.'],
+            'model_status': 'artifact_loaded',
         }

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Droplets, Heart, Scan, Brain, FileText, ArrowRight, Shield, Cpu, Zap } from 'lucide-react';
+import { Droplets, Heart, Scan, Eye, Ribbon, FileText, ArrowRight, Shield, Cpu, Zap } from 'lucide-react';
 
 export default function DashboardHome({ setTab, onSelectSample }) {
   const modules = [
@@ -43,17 +43,30 @@ export default function DashboardHome({ setTab, onSelectSample }) {
       keyInputs: 'Chest Radiograph (JPEG, PNG, DICOM-derived)'
     },
     {
-      id: 'mri',
-      title: 'Brain Tumor MRI Classifier',
-      category: 'Neuro-Oncology',
-      desc: 'Xception Transfer Learning architecture for 4-class intracranial tumor differential diagnosis.',
-      badge: '4-Class Differential',
+      id: 'eye',
+      title: 'Eye Disease Analyzer',
+      category: 'Ophthalmic Imaging',
+      desc: 'Integration workspace for a future fundus or ocular image classifier.',
+      badge: 'Model Slot',
       badgeColor: 'badge-purple',
-      icon: Brain,
-      iconColor: '#e08d73',
+      icon: Eye,
+      iconColor: '#6b46c1',
       gradient: '#f5faf6',
       borderColor: '#bcd8c3',
-      keyInputs: 'Cranial MRI Scan (Axial/Coronal T1/T2)'
+      keyInputs: 'Fundus or ocular image'
+    },
+    {
+      id: 'breast',
+      title: 'Breast Cancer Analyzer',
+      category: 'Breast Imaging',
+      desc: 'Integration workspace for a future mammogram or breast-image classifier.',
+      badge: 'Model Slot',
+      badgeColor: 'badge-purple',
+      icon: Ribbon,
+      iconColor: '#b83280',
+      gradient: '#f5faf6',
+      borderColor: '#bcd8c3',
+      keyInputs: 'Mammogram or breast scan'
     }
   ];
 
@@ -100,7 +113,7 @@ export default function DashboardHome({ setTab, onSelectSample }) {
           borderTop: '1px solid rgba(255, 255, 255, 0.08)'
         }}>
           <div>
-            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>4 Models</div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#38bdf8', fontFamily: 'var(--font-mono)' }}>3 Models</div>
             <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Multi-Modal AI Ensemble</div>
           </div>
           <div>

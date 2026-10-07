@@ -5,8 +5,9 @@ import OCRScannerView from './components/OCRScannerView';
 import DiabetesView from './components/DiabetesView';
 import HeartView from './components/HeartView';
 import XRayView from './components/XRayView';
-import MRIView from './components/MRIView';
-import { checkHealth } from './services/api';
+import ImageModelView from './components/ImageModelView';
+import BreastCancerView from './components/BreastCancerView';
+import { checkHealth, predictEye } from './services/api';
 import { Activity } from 'lucide-react';
 
 export default function App() {
@@ -14,6 +15,7 @@ export default function App() {
   const [systemStatus, setSystemStatus] = useState(null);
   const [appliedDiabetesData, setAppliedDiabetesData] = useState(null);
   const [appliedHeartData, setAppliedHeartData] = useState(null);
+  const [appliedBreastData, setAppliedBreastData] = useState(null);
   const [extractedHighlights, setExtractedHighlights] = useState(null);
 
   const fetchHealth = async () => {
@@ -32,6 +34,8 @@ export default function App() {
       setAppliedDiabetesData(params);
     } else if (targetDisease === 'heart') {
       setAppliedHeartData(params);
+    } else if (targetDisease === 'breast') {
+      setAppliedBreastData(params);
     }
     setExtractedHighlights(rawExtracted);
   };
@@ -75,9 +79,9 @@ export default function App() {
           <XRayView />
         )}
 
-        {currentTab === 'mri' && (
-          <MRIView />
-        )}
+        {currentTab === 'eye' && <ImageModelView kind="eye" onPredict={predictEye} />}
+
+        {currentTab === 'breast' && <BreastCancerView setTab={setCurrentTab} initialData={appliedBreastData} />}
       </main>
 
       {/* Footer */}

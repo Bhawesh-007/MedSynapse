@@ -44,19 +44,6 @@ def main():
     except Exception as e:
         print(f"   ❌ Error: {e}")
 
-    # 4. Brain Tumor MRI Model
-    print("\n4. Verifying Brain Tumor MRI Model...")
-    try:
-        model = ms.get_mri_model()
-        if model is not None:
-            dummy_input = np.random.rand(1, 299, 299, 3).astype(np.float32)
-            pred = model.predict(dummy_input, verbose=0)
-            print(f"   ✅ Brain Tumor Model Verified! Prediction shape: {pred.shape}")
-        else:
-            print("   ⚠️ Brain Tumor Model file not found.")
-    except Exception as e:
-        print(f"   ❌ Error: {e}")
-
     print("\n" + "=" * 60)
     print("🎉 Verification Complete!")
     print("=" * 60)

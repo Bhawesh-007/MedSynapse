@@ -15,15 +15,35 @@ if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
 
 try:
-    from backend.database import initialize_database, load_model_features, save_feature_extraction
+    from backend.database import (
+        initialize_database,
+        load_image_feature_extraction,
+        load_model_features,
+        save_feature_extraction,
+        save_image_feature_extraction,
+    )
     from backend.services.ocr_service import MedicalOCREngine
     from backend.services.model_service import ModelService
     from backend.services.gemma_service import GemmaService, GemmaServiceError
+    from backend.services.jev_scoring import score_disease_suitability
+    from backend.services.feature_resolution import resolve_features
+    from backend.services.heart_feature_contract import HEART_API_NAMES
+    from backend.services.clinical_report_service import ClinicalReportService
 except ImportError:
-    from database import initialize_database, load_model_features, save_feature_extraction
+    from database import (
+        initialize_database,
+        load_image_feature_extraction,
+        load_model_features,
+        save_feature_extraction,
+        save_image_feature_extraction,
+    )
     from services.ocr_service import MedicalOCREngine
     from services.model_service import ModelService
     from services.gemma_service import GemmaService, GemmaServiceError
+    from services.jev_scoring import score_disease_suitability
+    from services.feature_resolution import resolve_features
+    from services.heart_feature_contract import HEART_API_NAMES
+    from services.clinical_report_service import ClinicalReportService
 
 app = FastAPI(
     title="MedSynapse Clinical Diagnostic API",
@@ -48,6 +68,7 @@ app.add_middleware(
 
 model_service = ModelService.get_instance()
 gemma_service = GemmaService()
+clinical_report_service = ClinicalReportService(model_service, BASE_DIR)
 
 # Pydantic Schemas
 class DiabetesInput(BaseModel):
@@ -76,13 +97,22 @@ class HeartInput(BaseModel):
     thal: Optional[int] = 2
 
 
+class BreastCancerInput(BaseModel):
+    features: Dict[str, float]
+
+
+class ReportNarrativeInput(BaseModel):
+    report: Dict[str, Any]
+
+
 @app.get("/api/health")
 def health_check():
     models_status = {
         "diabetes_model": os.path.exists(os.path.join(BASE_DIR, "models", "diabetes_model.pkl")),
         "heart_model": os.path.exists(os.path.join(BASE_DIR, "models", "heart_model.pkl")),
         "xray_pneumonia_model": os.path.exists(os.path.join(BASE_DIR, "models", "xrays_pneumonia.keras")),
-        "brain_tumor_model": os.path.exists(os.path.join(BASE_DIR, "models", "brain_tumor_model.keras")),
+        "eye_disease_model": os.path.exists(os.path.join(BASE_DIR, "models", "eye_disease.keras")),
+        "breast_cancer_model": os.path.exists(os.path.join(BASE_DIR, "models", "breast_cancer_model.pkl")),
     }
     return {
         "status": "online",
@@ -198,15 +228,20 @@ async def parse_medical_report(
             }
 
         parsed_data = MedicalOCREngine.parse_report_parameters(extracted_text, disease_type)
+        resolved_parameters, feature_resolution_log = resolve_features(parsed_data["parameters"])
         response = {
             "success": True,
             "filename": filename,
             "raw_text": parsed_data["raw_text"],
             "line_count": parsed_data["line_count"],
             "extracted_count": parsed_data["extracted_count"],
-            "parameters": parsed_data["parameters"],
+            "parameters": resolved_parameters,
+            "feature_resolution_log": feature_resolution_log,
             "ready_inputs": parsed_data["ready_inputs"]
         }
+        response["jev_scoring"] = score_disease_suitability(
+            resolved_parameters, disease_type=disease_type
+        )
         # Existing OCR and regex extraction remain the first stage. Gemma only
         # consumes the OCR text afterwards and returns separately auditable
         # diabetes evidence; it does not overwrite the OCR response.
@@ -227,11 +262,66 @@ async def parse_medical_report(
                 source_filename=filename,
                 report_text=extracted_text,
                 features={
-                    "ocr_parameters": parsed_data["parameters"],
+                    "ocr_parameters": resolved_parameters,
                     "gemma_features": gemma_result["features"],
                 },
                 model_features=gemma_result["model_features"],
                 extraction_status=gemma_result["status"],
+            )
+        if disease_type.lower() in {"all", "heart"}:
+            try:
+                heart_result = gemma_service.extract_heart_features(extracted_text)
+            except GemmaServiceError as exc:
+                heart_result = {
+                    "status": "unavailable",
+                    "message": str(exc),
+                    "features": {},
+                    "missing_or_unverified": [],
+                    "model_features": None,
+                }
+            response["gemma_heart"] = heart_result
+            heart_parameters = {
+                HEART_API_NAMES[name]: feature
+                for name, feature in heart_result.get("features", {}).items()
+                if name in HEART_API_NAMES
+            }
+            if heart_parameters:
+                heart_score = score_disease_suitability(heart_parameters, disease_type="heart")
+                response["jev_scoring"] = [
+                    score for score in response["jev_scoring"]
+                    if score["disease"] != "Coronary Heart Disease"
+                ] + heart_score
+            response["heart_feature_extraction_id"] = save_feature_extraction(
+                disease_type="heart",
+                source_filename=filename,
+                report_text=extracted_text,
+                features={
+                    "ocr_parameters": resolved_parameters,
+                    "gemma_features": heart_result["features"],
+                },
+                model_features=heart_result["model_features"],
+                extraction_status=heart_result["status"],
+            )
+        if disease_type.lower() == "breast":
+            try:
+                breast_result = gemma_service.extract_breast_cancer_features(extracted_text)
+            except GemmaServiceError as exc:
+                breast_result = {"status": "unavailable", "message": str(exc), "features": {}, "missing_or_unverified": [], "model_features": None}
+            response["gemma_breast_cancer"] = breast_result
+            response["breast_features"] = breast_result["features"]
+            response["breast_extracted_count"] = sum(
+                1 for feature in breast_result["features"].values()
+                if feature.get("status") == "extracted" and feature.get("value") is not None
+            )
+            response["extracted_count"] = max(response["extracted_count"], response["breast_extracted_count"])
+            response["jev_scoring"] = score_disease_suitability(
+                parsed_data["parameters"], disease_type="breast",
+                breast_features=breast_result.get("features", {}),
+            )
+            response["breast_feature_extraction_id"] = save_feature_extraction(
+                disease_type="breast", source_filename=filename, report_text=extracted_text,
+                features=breast_result["features"], model_features=breast_result["model_features"],
+                extraction_status=breast_result["status"],
             )
         return response
     except Exception as e:
@@ -242,8 +332,12 @@ async def parse_medical_report(
 @app.post("/api/predict/diabetes")
 def predict_diabetes_risk(payload: DiabetesInput):
     try:
-        result = model_service.predict_diabetes(payload.model_dump())
-        return {"success": True, "data": result}
+        inputs = payload.model_dump()
+        result = model_service.predict_diabetes(inputs)
+        report = clinical_report_service.build_report(
+            disease_key="diabetes", prediction=result, inputs=inputs
+        )
+        return {"success": True, "data": result, "clinical_report": report}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Diabetes prediction failed: {str(e)}")
@@ -258,6 +352,10 @@ def predict_diabetes_from_feature_store(feature_extraction_id: str):
         return {
             "success": True,
             "data": result,
+            "clinical_report": clinical_report_service.build_report(
+                disease_key="diabetes", prediction=result, inputs=model_features,
+                feature_source="local_database", feature_extraction_id=feature_extraction_id,
+            ),
             "feature_extraction_id": feature_extraction_id,
             "feature_source": "local_database",
         }
@@ -273,8 +371,12 @@ def predict_diabetes_from_feature_store(feature_extraction_id: str):
 @app.post("/api/predict/heart")
 def predict_heart_risk(payload: HeartInput):
     try:
-        result = model_service.predict_heart(payload.model_dump())
-        return {"success": True, "data": result}
+        inputs = payload.model_dump()
+        result = model_service.predict_heart(inputs)
+        report = clinical_report_service.build_report(
+            disease_key="heart", prediction=result, inputs=inputs
+        )
+        return {"success": True, "data": result, "clinical_report": report}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Heart disease prediction failed: {str(e)}")
@@ -287,23 +389,152 @@ async def predict_xray(file: UploadFile = File(...)):
         if len(contents) == 0:
             raise HTTPException(status_code=400, detail="Uploaded X-Ray image is empty.")
         result = model_service.predict_xray(contents)
-        return {"success": True, "data": result}
+        feature_extraction_id = save_image_feature_extraction(
+            disease_type="pneumonia",
+            source_filename=file.filename or "",
+            image_bytes=contents,
+            preprocessing=result["image_features"],
+        )
+        return {
+            "success": True,
+            "data": result,
+            "clinical_report": clinical_report_service.build_report(
+                disease_key="pneumonia",
+                prediction=result,
+                inputs={"source_filename": file.filename or ""},
+                feature_source="uploaded_image_persisted_local_database",
+                feature_extraction_id=feature_extraction_id,
+                image_bytes=contents,
+            ),
+            "feature_extraction_id": feature_extraction_id,
+            "feature_source": "uploaded_image_persisted_local_database",
+        }
+    except HTTPException:
+        raise
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"X-Ray analysis failed: {str(e)}")
 
 
-@app.post("/api/predict/mri")
-async def predict_mri(file: UploadFile = File(...)):
+@app.post("/api/predict/xray/from-feature-store/{feature_extraction_id}")
+def predict_xray_from_feature_store(feature_extraction_id: str):
+    """Run pneumonia inference from the validated locally persisted X-ray."""
+    try:
+        image_bytes, stored_preprocessing = load_image_feature_extraction(
+            feature_extraction_id, "pneumonia"
+        )
+        result = model_service.predict_xray(image_bytes)
+        return {
+            "success": True,
+            "data": result,
+            "clinical_report": clinical_report_service.build_report(
+                disease_key="pneumonia",
+                prediction=result,
+                inputs={"source": "local image feature store"},
+                feature_source="local_database",
+                feature_extraction_id=feature_extraction_id,
+                image_bytes=image_bytes,
+            ),
+            "feature_extraction_id": feature_extraction_id,
+            "feature_source": "local_database",
+            "stored_preprocessing": stored_preprocessing,
+        }
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"X-Ray analysis failed: {str(exc)}") from exc
+
+
+async def _predict_uploaded_image(file: UploadFile, predictor, error_label: str):
     try:
         contents = await file.read()
         if len(contents) == 0:
-            raise HTTPException(status_code=400, detail="Uploaded MRI scan is empty.")
-        result = model_service.predict_mri(contents)
-        return {"success": True, "data": result}
+            raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+        return {"success": True, "data": predictor(contents)}
+    except HTTPException:
+        raise
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e))
     except Exception as e:
         traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Brain MRI analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"{error_label} failed: {str(e)}")
+
+
+@app.post("/api/predict/eye")
+async def predict_eye(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded image is empty.")
+        result = model_service.predict_eye(contents)
+        return {
+            "success": True,
+            "data": result,
+            "clinical_report": clinical_report_service.build_report(
+                disease_key="eye", prediction=result,
+                inputs={"source_filename": file.filename or ""}, image_bytes=contents,
+            ),
+        }
+    except HTTPException:
+        raise
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Eye disease analysis failed: {str(exc)}") from exc
+
+
+@app.post("/api/predict/breast-cancer")
+def predict_breast_cancer(payload: BreastCancerInput):
+    try:
+        result = model_service.predict_breast_cancer(payload.features)
+        report = clinical_report_service.build_report(
+            disease_key="breast", prediction=result, inputs=payload.features
+        )
+        return {"success": True, "data": result, "clinical_report": report}
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/predict/breast-cancer/from-feature-store/{feature_extraction_id}")
+def predict_breast_cancer_from_feature_store(feature_extraction_id: str):
+    try:
+        features = load_model_features(feature_extraction_id, "breast")
+        result = model_service.predict_breast_cancer(features)
+        return {
+            "success": True,
+            "data": result,
+            "clinical_report": clinical_report_service.build_report(
+                disease_key="breast", prediction=result, inputs=features,
+                feature_source="local_database", feature_extraction_id=feature_extraction_id,
+            ),
+            "feature_source": "local_database",
+            "feature_extraction_id": feature_extraction_id,
+        }
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/reports/generate-narrative")
+def generate_report_narrative(payload: ReportNarrativeInput):
+    """Generate narrative only from an already validated structured report."""
+    try:
+        return {"success": True, "data": clinical_report_service.generate_narrative(payload.report)}
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 # Serve built frontend static assets in production

@@ -23,6 +23,25 @@ from backend.services.diabetes_feature_contract import (
     missing_or_unverified_features,
     parse_gemma_diabetes_extraction,
 )
+from backend.services.breast_feature_contract import (
+    BreastFeatureContractError,
+    breast_extraction_json_schema,
+    breast_extraction_prompt,
+    build_model_features as build_breast_model_features,
+    extract_breast_features_from_text,
+    missing_or_unverified as missing_breast_features,
+    parse_breast_extraction,
+    serialise_features as serialise_breast_features,
+)
+from backend.services.heart_feature_contract import (
+    HeartFeatureContractError,
+    build_heart_model_features,
+    heart_extraction_json_schema,
+    heart_extraction_prompt,
+    missing_or_unverified as missing_heart_features,
+    parse_heart_extraction,
+    serialise_features as serialise_heart_features,
+)
 
 
 class GemmaServiceError(RuntimeError):
@@ -85,15 +104,86 @@ class GemmaService:
             "model_features": None if missing else build_diabetes_model_features(features),
         }
 
-    def _generate_json(self, ocr_text: str) -> dict[str, Any]:
-        prompt = f"{diabetes_extraction_prompt()}\n\nOCR REPORT TEXT:\n{ocr_text}"
+    def extract_breast_cancer_features(self, ocr_text: str) -> dict[str, Any]:
+        """Extract WDBC values from a pathology report, never an image.
+
+        Explicit OCR labels are used first. Gemma is only used to resolve
+        values that the deterministic extractor cannot safely read.
+        """
+        if not ocr_text or not ocr_text.strip():
+            raise GemmaServiceError("Cannot send empty OCR text to Gemma")
+        features = extract_breast_features_from_text(ocr_text)
+        missing = missing_breast_features(features)
+        if not missing:
+            return {
+                "status": "ready_for_inference",
+                "message": "All 30 WDBC FNA features were extracted from explicit OCR labels; doctor approval is still required.",
+                "features": serialise_breast_features(features),
+                "missing_or_unverified": [],
+                "model_features": build_breast_model_features(features),
+            }
+        if not self.configured:
+            return {
+                "status": "needs_review",
+                "message": "Some WDBC values were not explicitly labelled in OCR text. Set GEMMA_MODEL to attempt structured extraction, or complete them manually.",
+                "features": serialise_breast_features(features),
+                "missing_or_unverified": missing,
+                "model_features": None,
+            }
+        response_payload = self._generate_json(ocr_text, breast_extraction_prompt(), breast_extraction_json_schema())
+        try:
+            gemma_features = parse_breast_extraction(response_payload)
+        except BreastFeatureContractError as exc:
+            raise GemmaServiceError(f"Gemma returned an invalid breast-cancer extraction: {exc}") from exc
+        # Deterministic OCR matches have exact evidence and therefore take
+        # precedence over LLM extraction for the same feature.
+        features = {
+            name: features[name] if features[name].status == "extracted" else gemma_features[name]
+            for name in features
+        }
+        missing = missing_breast_features(features)
+        return {
+            "status": "needs_review" if missing else "ready_for_inference",
+            "message": "Doctor review is required for missing or ambiguous fields." if missing else "All 30 WDBC FNA features were extracted; doctor approval is still required.",
+            "features": serialise_breast_features(features),
+            "missing_or_unverified": missing,
+            "model_features": None if missing else build_breast_model_features(features),
+        }
+
+    def extract_heart_features(self, ocr_text: str) -> dict[str, Any]:
+        """Extract and validate all 13 features required by the heart model."""
+        if not self.configured:
+            return {
+                "status": "not_configured",
+                "message": "Set GEMMA_MODEL to enable local Gemma extraction.",
+                "features": {}, "missing_or_unverified": [], "model_features": None,
+            }
+        if not ocr_text or not ocr_text.strip():
+            raise GemmaServiceError("Cannot send empty OCR text to Gemma")
+        payload = self._generate_json(ocr_text, heart_extraction_prompt(), heart_extraction_json_schema())
+        try:
+            features = parse_heart_extraction(payload)
+        except HeartFeatureContractError as exc:
+            raise GemmaServiceError(f"Gemma returned an invalid heart extraction: {exc}") from exc
+        missing = missing_heart_features(features)
+        return {
+            "status": "needs_review" if missing else "ready_for_inference",
+            "message": "Doctor review is required for missing or ambiguous fields." if missing else "All 13 heart features were extracted; doctor approval is still required.",
+            "features": serialise_heart_features(features),
+            "missing_or_unverified": missing,
+            "model_features": None if missing else build_heart_model_features(features),
+        }
+
+    def _generate_json(self, ocr_text: str, extraction_prompt: str | None = None,
+                       json_schema: dict[str, Any] | None = None) -> dict[str, Any]:
+        prompt = f"{extraction_prompt or diabetes_extraction_prompt()}\n\nOCR REPORT TEXT:\n{ocr_text}"
         request_payload = {
             "model": self.model_name,
             "prompt": prompt,
             "stream": False,
             # Ollama accepts a JSON Schema here.  Generic JSON mode permits
             # the model to drop keys; this schema requires all seven fields.
-            "format": diabetes_extraction_json_schema(),
+            "format": json_schema or diabetes_extraction_json_schema(),
             "options": {"temperature": 0},
         }
         request = Request(

@@ -126,6 +126,9 @@ class MedicalOCREngine:
             extracted['trestbps'] = {
                 'value': sys_val,
                 'confidence': 0.95,
+                'status': 'derived',
+                'rule_id': 'TRESTBPS_FROM_BLOOD_PRESSURE',
+                'source_features': ['blood_pressure'],
                 'unit': 'mm Hg',
                 'normal_range': '90 - 120 mm Hg',
                 'matched_text': bp_match.group(0).strip()
@@ -136,7 +139,11 @@ class MedicalOCREngine:
             ], min_val=50, max_val=250)
             if sys_val is not None:
                 extracted['blood_pressure'] = {'value': sys_val, 'confidence': 0.85, 'unit': 'mm Hg', 'matched_text': sys_match}
-                extracted['trestbps'] = {'value': sys_val, 'confidence': 0.85, 'unit': 'mm Hg', 'matched_text': sys_match}
+                extracted['trestbps'] = {
+                    'value': sys_val, 'confidence': 0.85, 'status': 'derived',
+                    'rule_id': 'TRESTBPS_FROM_SYSTOLIC_PRESSURE',
+                    'source_features': ['blood_pressure'], 'unit': 'mm Hg', 'matched_text': sys_match,
+                }
 
         # 3. Insulin
         ins_val, ins_match = find_param_number([
@@ -152,7 +159,15 @@ class MedicalOCREngine:
                 'status': 'Elevated' if ins_val > 25 else 'Normal'
             }
 
-        # 4. BMI (Body Mass Index)
+        # 4. Weight / height evidence (used only for a transparent BMI derivation)
+        weight_m = re.search(r'(?:weight|wt)[^0-9\n]{0,10}?([0-9]{2,3}(?:\.[0-9]+)?)\s*(?:kg|kgs)', cleaned_text, re.IGNORECASE)
+        height_m = re.search(r'(?:height|ht)[^0-9\n]{0,10}?([0-9]{2,3}(?:\.[0-9]+)?)\s*(?:cm|cms)', cleaned_text, re.IGNORECASE)
+        if weight_m:
+            extracted['weight'] = {'value': float(weight_m.group(1)), 'confidence': 0.95, 'unit': 'kg', 'matched_text': weight_m.group(0).strip()}
+        if height_m:
+            extracted['height'] = {'value': float(height_m.group(1)), 'confidence': 0.95, 'unit': 'cm', 'matched_text': height_m.group(0).strip()}
+
+        # 5. BMI (Body Mass Index)
         bmi_val, bmi_match_text = find_param_number([
             r'(?:body\s*mass\s*index|b\.?m\.?i\.?)[^0-9\n]{0,20}?([0-9]{1,2}(?:\.[0-9]+)?)'
         ], min_val=10, max_val=75)
@@ -166,8 +181,6 @@ class MedicalOCREngine:
                 'status': 'Obese' if bmi_val >= 30 else ('Overweight' if bmi_val >= 25 else 'Normal')
             }
         else:
-            weight_m = re.search(r'(?:weight|wt)[^0-9\n]{0,10}?([0-9]{2,3}(?:\.[0-9]+)?)\s*(?:kg|kgs)', cleaned_text, re.IGNORECASE)
-            height_m = re.search(r'(?:height|ht)[^0-9\n]{0,10}?([0-9]{2,3}(?:\.[0-9]+)?)\s*(?:cm|cms)', cleaned_text, re.IGNORECASE)
             if weight_m and height_m:
                 wt = float(weight_m.group(1))
                 ht_m = float(height_m.group(1)) / 100.0
@@ -175,6 +188,9 @@ class MedicalOCREngine:
                 extracted['bmi'] = {
                     'value': calc_bmi,
                     'confidence': 0.90,
+                    'status': 'derived',
+                    'rule_id': 'BMI_FROM_WEIGHT_HEIGHT',
+                    'source_features': ['weight', 'height'],
                     'unit': 'kg/m²',
                     'normal_range': '18.5 - 24.9 kg/m²',
                     'matched_text': f"Weight {wt}kg, Height {height_m.group(1)}cm -> BMI {calc_bmi}",
@@ -219,12 +235,13 @@ class MedicalOCREngine:
 
         # 8. Diabetes Pedigree Function / HbA1c
         dpf_val, dpf_match_text = find_param_number([
-            r'(?:diabetes\s*pedigree|pedigree\s*function|dpf)[^0-9\n]{0,20}?([0-9]*(?:\.[0-9]+)?)'
+            r'(?:diabetes\s*pedigree|pedigree\s*function|dpf)[^0-9\n]{0,20}?([0-9]+(?:\.[0-9]+)?)'
         ], min_val=0.01, max_val=3.0)
         if dpf_val is not None:
             extracted['dpf'] = {
                 'value': dpf_val,
                 'confidence': 0.92,
+                'status': 'extracted',
                 'matched_text': dpf_match_text.strip()
             }
         else:
@@ -236,6 +253,9 @@ class MedicalOCREngine:
                 extracted['dpf'] = {
                     'value': dpf_est,
                     'confidence': 0.88,
+                    'status': 'approximated',
+                    'rule_id': 'DPF_FROM_HBA1C_ESTIMATE',
+                    'source_features': ['hba1c'],
                     'matched_text': f"HbA1c: {hba1c_val}% -> Estimated Pedigree Score: {dpf_est}"
                 }
 
@@ -281,6 +301,9 @@ class MedicalOCREngine:
             extracted['fbs'] = {
                 'value': 1 if extracted['glucose']['value'] > 120 else 0,
                 'confidence': 0.95,
+                'status': 'derived',
+                'rule_id': 'FBS_FLAG_FROM_GLUCOSE',
+                'source_features': ['glucose'],
                 'matched_text': f"Derived from Glucose ({extracted['glucose']['value']} mg/dL)"
             }
 

@@ -30,9 +30,7 @@ export default function DiagnosticResultCard({
 
   const isHealthy = result.prediction === 0 || 
                     result.is_positive === false || 
-                    result.has_disease === false || 
-                    result.has_tumor === false || 
-                    result.diagnosis === 'No Tumor (Healthy)';
+                    result.has_disease === false;
 
   const riskPercent = result.risk_percentage || 
                       result.confidence_percentage || 
@@ -202,7 +200,7 @@ export default function DiagnosticResultCard({
       </div>
 
       {/* =========================================================================
-          4. IMAGE TRANSFORMATION & TENSOR NORMALIZATION METRICS (IF RADIOLOGY/MRI)
+          4. IMAGE TRANSFORMATION & TENSOR NORMALIZATION METRICS (IF RADIOLOGY)
           ========================================================================= */}
       {result.image_transformation && (
         <div className="break-inside-avoid" style={{
@@ -223,41 +221,6 @@ export default function DiagnosticResultCard({
               Standardized Model Tensor: <strong>{result.image_transformation.transformed_shape}</strong> (Float32 [0.0 - 1.0])
             </span>
           </div>
-        </div>
-      )}
-
-      {/* =========================================================================
-          5. MULTI-CLASS PROBABILITIES TABLE (IF MRI SCAN)
-          ========================================================================= */}
-      {result.class_probabilities && (
-        <div className="break-inside-avoid" style={{ margin: '1rem 0' }}>
-          <h4 style={{ fontSize: '0.9rem', fontWeight: 700, color: '#ffffff', marginBottom: '8px' }}>
-            Differential Model Class Probabilities Distribution:
-          </h4>
-          <table className="print-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
-            <thead>
-              <tr>
-                <th style={{ textAlign: 'left' }}>Pathology Class</th>
-                <th style={{ width: '45%' }}>Probability Weight</th>
-                <th style={{ textAlign: 'right', width: '20%' }}>Confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(result.class_probabilities).map(([cls, prob]) => (
-                <tr key={cls}>
-                  <td style={{ fontWeight: 600 }}>{cls}</td>
-                  <td>
-                    <div style={{ width: '100%', height: '8px', backgroundColor: 'rgba(255, 255, 255, 0.1)', borderRadius: '4px', overflow: 'hidden' }}>
-                      <div style={{ width: `${prob}%`, height: '100%', backgroundColor: prob > 40 ? '#0284c7' : '#94a3b8' }} />
-                    </div>
-                  </td>
-                  <td style={{ textAlign: 'right', fontFamily: 'var(--font-mono)', fontWeight: 700 }}>
-                    {prob}%
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
         </div>
       )}
 

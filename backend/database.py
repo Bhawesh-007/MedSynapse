@@ -3,6 +3,12 @@
 SQLite is used for the local development deployment. The schema deliberately
 stores the structured extraction payload and a report digest, not the original
 uploaded report text, which may contain sensitive patient information.
+
+For image-only models such as the pneumonia CNN, the local feature store also
+keeps the uploaded image bytes. The model's features are derived pixel values,
+so a database-backed inference path cannot be reproduced from an OCR digest.
+This is intended for the local prototype; production deployments should use
+approved encrypted medical-image storage instead of a SQLite BLOB.
 """
 
 from __future__ import annotations
@@ -73,6 +79,23 @@ def initialize_database() -> Path:
                 ON feature_extractions(report_id);
             CREATE INDEX IF NOT EXISTS idx_feature_extractions_disease_created
                 ON feature_extractions(disease_type, created_at DESC);
+
+            CREATE TABLE IF NOT EXISTS image_feature_extractions (
+                id TEXT PRIMARY KEY,
+                disease_type TEXT NOT NULL,
+                source_filename TEXT,
+                image_sha256 TEXT NOT NULL,
+                image_bytes BLOB NOT NULL,
+                preprocessing_json TEXT NOT NULL DEFAULT '{}',
+                extraction_status TEXT NOT NULL,
+                clinician_approval_status TEXT NOT NULL DEFAULT 'pending'
+                    CHECK (clinician_approval_status IN ('pending', 'approved', 'rejected')),
+                created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_image_feature_extractions_disease_created
+                ON image_feature_extractions(disease_type, created_at DESC);
             """
         )
     return get_database_path()
@@ -81,6 +104,11 @@ def initialize_database() -> Path:
 def report_sha256(report_text: str) -> str:
     """Return a stable digest for deduplication without persisting report text."""
     return hashlib.sha256(report_text.encode("utf-8")).hexdigest()
+
+
+def image_sha256(image_bytes: bytes) -> str:
+    """Return a stable digest for the source image stored in the local prototype."""
+    return hashlib.sha256(image_bytes).hexdigest()
 
 
 def save_feature_extraction(
@@ -155,3 +183,72 @@ def load_model_features(extraction_id: str, disease_type: str) -> dict:
     if not isinstance(model_features, dict):
         raise ValueError("Stored model features have an invalid format.")
     return model_features
+
+
+def save_image_feature_extraction(
+    *,
+    disease_type: str,
+    source_filename: str,
+    image_bytes: bytes,
+    preprocessing: dict,
+    extraction_status: str = "ready_for_inference",
+) -> str:
+    """Persist a validated image-model input and its preprocessing evidence.
+
+    This is deliberately separate from ``feature_extractions``: X-ray CNN
+    inputs are image pixels, rather than JSON-compatible tabular features.
+    """
+    if not image_bytes:
+        raise ValueError("Image bytes cannot be empty.")
+
+    extraction_id = str(uuid.uuid4())
+    with get_connection() as connection:
+        connection.execute(
+            """
+            INSERT INTO image_feature_extractions (
+                id, disease_type, source_filename, image_sha256, image_bytes,
+                preprocessing_json, extraction_status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                extraction_id,
+                disease_type,
+                source_filename or None,
+                image_sha256(image_bytes),
+                sqlite3.Binary(image_bytes),
+                json.dumps(preprocessing, separators=(",", ":"), ensure_ascii=False),
+                extraction_status,
+            ),
+        )
+    return extraction_id
+
+
+def load_image_feature_extraction(extraction_id: str, disease_type: str) -> tuple[bytes, dict]:
+    """Load a validated image-model input from the local feature store."""
+    with get_connection() as connection:
+        row = connection.execute(
+            """
+            SELECT disease_type, image_sha256, image_bytes, preprocessing_json, extraction_status
+            FROM image_feature_extractions
+            WHERE id = ?
+            """,
+            (extraction_id,),
+        ).fetchone()
+
+    if row is None:
+        raise LookupError("Image feature extraction was not found in the local database.")
+    if row["disease_type"] != disease_type:
+        raise ValueError("Stored image does not belong to the requested disease model.")
+    if row["extraction_status"] != "ready_for_inference":
+        raise ValueError("Stored image is incomplete or requires clinician review before inference.")
+
+    image_bytes = bytes(row["image_bytes"])
+    if not image_bytes or image_sha256(image_bytes) != row["image_sha256"]:
+        raise ValueError("Stored image evidence is corrupted.")
+    try:
+        preprocessing = json.loads(row["preprocessing_json"])
+    except json.JSONDecodeError as exc:
+        raise ValueError("Stored image preprocessing evidence is corrupted.") from exc
+    if not isinstance(preprocessing, dict):
+        raise ValueError("Stored image preprocessing evidence has an invalid format.")
+    return image_bytes, preprocessing

@@ -45,7 +45,7 @@ def main():
 
     url = f"http://localhost:{port}"
     print(f"\n🚀 MedSynapse Server is running at: {url}")
-    print("📡 Diagnostic Modules: Smart Lab Report OCR + Diabetes + Heart + Pneumonia X-Ray + Brain MRI")
+    print("📡 Diagnostic Modules: Smart Lab Report OCR + Diabetes + Heart + Pneumonia X-Ray")
     print("💡 Press Ctrl+C to stop the server\n")
 
     if not args.no_browser:
