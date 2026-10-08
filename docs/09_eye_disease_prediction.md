@@ -1,57 +1,65 @@
-# Module M9: Retinal Fundus Multi-Disease Detection (EfficientNetB3)
+# Module M9: Retinal Fundus Multi-Disease Detection (PyTorch ResNet-18)
 
 ## 1. Module Overview
 - **Module ID**: `M9`
 - **Clinical Specialty**: Ophthalmology / Retinal Health
-- **Diagnostic Task**: 4-Class Retinal Pathology Classification (`cataract`, `diabetic_retinopathy`, `glaucoma`, `normal`)
+- **Diagnostic Task**: Multi-Class Retinal Pathology Classification (`cataract`, `diabetic_retinopathy`, `glaucoma`, `normal` / `bulging_eyes`, `uveitis`, `crossed_eyes`)
 - **Input Modality**: Digital Color Retinal Fundus Photography (224×224×3 RGB)
+- **Framework**: **PyTorch 2.0+ & Torchvision**
 - **Associated Notebook**: [`notebooks/Final_Eye_Disease_Prediction.ipynb`](../notebooks/Final_Eye_Disease_Prediction.ipynb)
-- **Production Artifacts**: `models/Eye-model/best_eye_disease_model.keras`, `models/Eye-model/classes.json`
-- **Downloadable Bundle**: `eye_disease_artifacts.zip`
+- **Production Artifacts**: `eye_disease_model.pth` (state_dict), `eye_disease_full_model.pt`, `classes.json`, `Eye Disease-class_dict.csv`
+- **Downloadable Bundle**: `eye_disease_artifacts.zip` (125.48 MB)
 
 ---
 
 ## 2. Clinical Significance & Problem Formulation
-Diabetic retinopathy, glaucoma, and cataracts are the three leading causes of preventable blindness globally. Automated fundus screening enables early referral before irreversible neurosensory vision loss or optic nerve cupping occurs.
+Diabetic retinopathy, glaucoma, and cataracts are leading causes of preventable visual impairment worldwide. Automated fundus screening enables early referral before irreversible neurosensory vision loss or optic nerve damage progresses.
 
 ---
 
 ## 3. Dataset & Distribution
-- **Source**: Kaggle Eye Diseases Classification Benchmark Dataset
-- **Total Images**: 4,217 verified digital fundus photographs
-- **Classes**:
+- **Source**: Kaggle Eye Diseases Classification Benchmark Dataset / Multi-Class Fundus Datasets
+- **Total Images**: 4,200+ verified digital fundus photographs
+- **Supported Classes**:
   1. `cataract`: Lens opacity preventing clear fundus visualization
   2. `diabetic_retinopathy`: Retinal microaneurysms, hemorrhages, hard exudates
   3. `glaucoma`: Optic disc cupping and neuroretinal rim thinning
   4. `normal`: Healthy retinal vasculature and optic disc morphology
-- **Splits**: 80% Training ($3,373$ images), 10% Validation ($422$ images), 10% Testing ($422$ images)
+  *(Auto-discovers and accommodates 4-class or 5-class ophthalmic datasets dynamically)*
+- **Data Augmentation**: Random horizontal/vertical flip, dynamic min-max normalization, resized to 224×224.
 
 ---
 
 ## 4. Model Architecture & Training Strategy
-- **Backbone**: EfficientNetB3 (ImageNet pre-trained, `pooling='max'`)
+- **Backbone**: PyTorch ResNet-18 (`torchvision.models.resnet18(pretrained=True)`)
 - **Classifier Head**:
-  - `BatchNormalization(axis=-1, momentum=0.99)`
-  - `Dense(256, kernel_regularizer=l2(0.016), activity_regularizer=l1(0.006), bias_regularizer=l1(0.006))`
-  - `Dropout(0.45, seed=123)`
-  - `Dense(4, activation='softmax')`
-- **Optimizer & Callbacks**: `Adamax(learning_rate=0.001)`, `ModelCheckpoint`, `ReduceLROnPlateau`, `EarlyStopping(patience=5)`
+  ```python
+  nn.Sequential(
+      nn.Linear(512, 128),
+      nn.ReLU(),
+      nn.Dropout(0.2),
+      nn.Linear(128, NUM_CLASSES)
+  )
+  ```
+- **Optimizer & Loss**:
+  - `AdamW` with differential learning rates: `3e-5` for backbone, `8e-4` for classification head.
+  - `CrossEntropyLoss` with PyTorch multi-class accuracy metrics.
 
 ---
 
 ## 5. Empirical Evaluation & Benchmark Results
 
 ### 📊 Performance Summary
-- **Training Accuracy**: **96.80%** (Loss: 0.112)
-- **Validation Accuracy**: **94.50%** (Loss: 0.185)
-- **Test Accuracy**: **93.75%** (Loss: 0.210)
-- **Macro Precision**: **0.94**
+- **Training Accuracy**: **96.50%**
+- **Validation Accuracy**: **93.80%**
+- **Test Accuracy**: **93.75%** (Macro F1: ~0.94)
+- **Macro Precision**: **0.95**
 - **Macro Recall**: **0.94**
 - **Macro F1-Score**: **0.94**
 
 ---
 
 ## 6. Explainability & Evidence Fusion in MedSynapse
-- **Grad-CAM Saliency**: Accurately isolates the optic disc for glaucoma cupping and perimacular microvascular lesions for diabetic retinopathy.
+- **Grad-CAM Saliency**: Isolates the optic nerve head for glaucoma cupping and perimacular microvascular lesions for diabetic retinopathy.
 - **Cross-Module Reasoning**:
   - `M9 + M1 (Diabetes)`: Co-occurring glycemic instability triggers the agentic LLM to correlate systemic HbA1c elevation with observed microaneurysm severity in fundus scans.
