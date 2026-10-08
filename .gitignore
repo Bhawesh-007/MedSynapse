@@ -73,6 +73,10 @@ models/brain_tumor_model/*.keras
 data/*.db
 data/*.sqlite3
 
+# Local clinical feature store (contains sensitive extracted evidence)
+data/medsynapse.db
+data/medsynapse.db-*
+
 # Node / Frontend
 node_modules/
 frontend/node_modules/
