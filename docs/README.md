@@ -17,7 +17,7 @@ All models have been evaluated on held-out clinical test cohorts and benchmarked
 | **M5** | **Oncology** | Breast Cancer (WDBC) | FNA Biopsy (30 Features) | PCA + Tuned Logistic Regression / Ensemble | **95.91%** | 0.97 | 0.96 | **0.97** | `models/breast_cancer_artifacts.zip` |
 | **M6** | **Hepatology** | Liver Disease | Tabular LFT (10 Parameters) | Random Forest & Gradient Boosting | **72.10%** | 0.74 | 0.72 | **0.76** | `models/liver_disease_artifacts.zip` |
 | **M7** | **Nephrology** | Kidney Pathology (4-Class) | CT Scan (150×150×3) | U-Net Classifier & EfficientNetB0 | **99.72%** | 1.00 | 1.00 | **1.00** | `models/kidney_stone_artifacts.zip` |
-| **M8** | **Dermatology** | Skin Cancer (Benign vs Malignant / ISIC) | Dermoscopy (224×224×3) | ResNet50 / 5-Stage CNN | **88.40%** | 0.88 | 0.87 | **0.87** | `models/skin_cancer_artifacts.zip` |
+| **M8** | **Dermatology** | Skin Cancer (7-Class HAM10000) | Dermoscopy (224×224×3) | ResNet-50 Deep Transfer Learning | **88.40%** | 0.88 | 0.87 | **0.87** | `models/skin_cancer_artifacts.zip` |
 | **M9** | **Ophthalmology** | Eye Diseases (Multi-Class) | Retinal Fundus (224×224×3) | PyTorch ResNet-18 Deep Transfer Learning | **93.75%** | 0.95 | 0.94 | **0.94** | `models/eye_disease_artifacts.zip` |
 
 ---
