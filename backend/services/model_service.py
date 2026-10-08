@@ -74,6 +74,18 @@ DATABASE_DIABETES_FEATURE_ORDER = (
     'BMI_Cat',
 )
 
+LEGACY_DATABASE_DIABETES_FEATURE_ORDER = (
+    'Pregnancies',
+    'Glucose',
+    'BloodPressure',
+    'SkinThickness',
+    'Insulin',
+    'BMI',
+    'DiabetesPedigreeFunction',
+    'Age',
+    'BMI_Cat',
+)
+
 
 class ModelService:
     _instance = None
@@ -190,25 +202,39 @@ class ModelService:
     def predict_diabetes_from_feature_store(self, model_features: dict) -> dict:
         """Run diabetes inference using only the validated database feature set.
 
-        A legacy nine-feature artifact is refused rather than receiving an
-        invented DPF value. Install the DPF-free eight-feature artifact before
-        enabling this endpoint in production.
+        The production contract is DPF-free. A legacy nine-feature artifact is
+        accepted only for explicitly enabled synthetic pipeline testing, and
+        only when the database record already contains an approximated DPF.
         """
         model, scaler = self.get_diabetes_model()
         expected_feature_count = getattr(scaler, 'n_features_in_', None)
-        if expected_feature_count != len(DATABASE_DIABETES_FEATURE_ORDER):
+        allow_synthetic_dpf = os.getenv(
+            'MEDSYNAPSE_ALLOW_SYNTHETIC_DPF', ''
+        ).strip().lower() in {'1', 'true', 'yes'}
+        feature_order = DATABASE_DIABETES_FEATURE_ORDER
+        using_synthetic_dpf = False
+
+        if expected_feature_count == len(LEGACY_DATABASE_DIABETES_FEATURE_ORDER):
+            if not allow_synthetic_dpf:
+                raise ValueError(
+                    "The installed diabetes artifact requires 9 features, including "
+                    "DiabetesPedigreeFunction. It cannot use the DPF-free local feature "
+                    "store unless MEDSYNAPSE_ALLOW_SYNTHETIC_DPF=1 is explicitly enabled "
+                    "for synthetic pipeline testing."
+                )
+            feature_order = LEGACY_DATABASE_DIABETES_FEATURE_ORDER
+            using_synthetic_dpf = True
+        elif expected_feature_count != len(DATABASE_DIABETES_FEATURE_ORDER):
             raise ValueError(
-                "The installed diabetes artifact requires "
-                f"{expected_feature_count} features, including DiabetesPedigreeFunction. "
-                "It cannot use the DPF-free local feature store. Install the retrained 8-feature artifact first."
+                f"The installed diabetes scaler has an unsupported feature count: {expected_feature_count}."
             )
 
-        missing = [name for name in DATABASE_DIABETES_FEATURE_ORDER if name not in model_features]
+        missing = [name for name in feature_order if name not in model_features]
         if missing:
             raise ValueError(f"Stored diabetes features are missing: {', '.join(missing)}")
         try:
             input_arr = np.array([[
-                float(model_features[name]) for name in DATABASE_DIABETES_FEATURE_ORDER
+                float(model_features[name]) for name in feature_order
             ]])
         except (TypeError, ValueError) as exc:
             raise ValueError("Stored diabetes features must all be finite numeric values.") from exc
@@ -262,6 +288,7 @@ class ModelService:
             'risk_tier': 'High Risk' if risk_probability >= 0.65 else ('Moderate Risk' if risk_probability >= 0.35 else 'Low Risk'),
             'contributing_factors': factors,
             'recommendations': recommendations,
+            'synthetic_dpf_test_mode': using_synthetic_dpf,
         }
 
     # 2. Heart Disease Model

@@ -6,6 +6,8 @@ They describe model behaviour, never clinical causality or a confirmed diagnosis
 
 from __future__ import annotations
 
+import json
+import math
 from pathlib import Path
 from uuid import uuid4
 
@@ -40,6 +42,87 @@ class ExplainabilityService:
             "all_contributions": ranked,
             "limitations": ["SHAP attributes model behaviour for this input; it does not prove causality."],
         }
+
+    @staticmethod
+    def _attach_reference_metadata(report: dict, background_path: Path) -> dict:
+        test_marker = background_path.with_suffix(".test-only.json")
+        if not test_marker.exists():
+            return report
+        try:
+            marker = json.loads(test_marker.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            marker = {"test_only": True, "warning": "Synthetic SHAP background marker is unreadable."}
+        report["reference_background"] = marker
+        report["limitations"].append(
+            "The reference background is synthetic and suitable only for software pipeline testing."
+        )
+        return report
+
+    @staticmethod
+    def _exact_interventional_shap(*, predict_proba, model_input: np.ndarray,
+                                   background: np.ndarray, feature_names: list[str],
+                                   raw_values: dict, method_label: str) -> dict:
+        """Compute exact model-agnostic Shapley values for a small feature set.
+
+        This fallback is practical for the nine-feature diabetes model. It is
+        intentionally refused for wider models because its cost grows as 2^M.
+        """
+        feature_count = model_input.shape[1]
+        if feature_count > 12:
+            return ExplainabilityService._missing_shap(
+                "Install the optional 'shap' package; the exact fallback is limited to 12 features.",
+                method_label,
+            )
+
+        mask_count = 1 << feature_count
+        evaluation_batches = []
+        for mask in range(mask_count):
+            candidates = np.array(background, dtype=float, copy=True)
+            for index in range(feature_count):
+                if mask & (1 << index):
+                    candidates[:, index] = model_input[0, index]
+            evaluation_batches.append(candidates)
+
+        probabilities = np.asarray(predict_proba(np.vstack(evaluation_batches)))
+        if probabilities.ndim != 2 or probabilities.shape[1] < 1:
+            raise ValueError("predict_proba returned an incompatible shape")
+        positive_index = 1 if probabilities.shape[1] > 1 else 0
+        coalition_values = probabilities[:, positive_index].reshape(
+            mask_count, len(background)
+        ).mean(axis=1)
+
+        contributions = np.zeros(feature_count, dtype=float)
+        denominator = math.factorial(feature_count)
+        for index in range(feature_count):
+            bit = 1 << index
+            for mask in range(mask_count):
+                if mask & bit:
+                    continue
+                subset_size = mask.bit_count()
+                weight = (
+                    math.factorial(subset_size)
+                    * math.factorial(feature_count - subset_size - 1)
+                    / denominator
+                )
+                contributions[index] += weight * (
+                    coalition_values[mask | bit] - coalition_values[mask]
+                )
+
+        report = ExplainabilityService._contribution_report(
+            values=contributions,
+            base_value=coalition_values[0],
+            feature_names=feature_names,
+            raw_values=raw_values,
+            method=f"Exact interventional SHAP fallback ({method_label})",
+            output_space="positive-class probability",
+        )
+        reconstructed = float(coalition_values[0] + contributions.sum())
+        report["additivity_check"] = {
+            "reconstructed_probability": round(reconstructed, 6),
+            "model_probability": round(float(coalition_values[-1]), 6),
+            "absolute_error": round(abs(reconstructed - float(coalition_values[-1])), 12),
+        }
+        return report
 
     @staticmethod
     def tree_shap(*, model, transformed_input: np.ndarray, feature_names: list[str], raw_values: dict) -> dict:
@@ -90,13 +173,31 @@ class ExplainabilityService:
                 method_label,
             )
         try:
-            import shap
-        except ImportError:
-            return ExplainabilityService._missing_shap("Install the optional 'shap' package to compute tabular explanations.", method_label)
-        try:
             background = np.load(background_path, allow_pickle=False)
             if background.ndim != 2 or background.shape[1] != model_input.shape[1] or len(background) < 2:
                 raise ValueError("Reference background has an incompatible shape.")
+        except Exception as exc:
+            return ExplainabilityService._missing_shap(
+                f"SHAP reference background could not be loaded: {exc}", method_label
+            )
+        try:
+            import shap
+        except ImportError:
+            try:
+                report = ExplainabilityService._exact_interventional_shap(
+                    predict_proba=predict_proba,
+                    model_input=model_input,
+                    background=background,
+                    feature_names=feature_names,
+                    raw_values=raw_values,
+                    method_label=method_label,
+                )
+                return ExplainabilityService._attach_reference_metadata(report, background_path)
+            except Exception as exc:
+                return ExplainabilityService._missing_shap(
+                    f"Exact SHAP fallback failed: {exc}", method_label
+                )
+        try:
             explainer = shap.Explainer(predict_proba, background, algorithm="permutation")
             result = explainer(model_input, max_evals=max(2 * model_input.shape[1] + 1, 33))
             values = np.asarray(result.values)
@@ -110,10 +211,11 @@ class ExplainabilityService:
                 base_value = base_values[0, 1 if base_values.shape[-1] > 1 else 0]
             else:
                 base_value = base_values.reshape(-1)[0]
-            return ExplainabilityService._contribution_report(
+            report = ExplainabilityService._contribution_report(
                 values=positive_values, base_value=base_value, feature_names=feature_names,
                 raw_values=raw_values, method=method_label, output_space="positive-class probability",
             )
+            return ExplainabilityService._attach_reference_metadata(report, background_path)
         except Exception as exc:
             return ExplainabilityService._missing_shap(f"SHAP computation failed: {exc}", method_label)
 
