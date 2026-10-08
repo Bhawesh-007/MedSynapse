@@ -86,9 +86,9 @@ The system ingests **multi-modal patient inputs** (clinical text, spoken audio, 
 
 ---
 
-## 🔬 Core Contributions (as detailed in research paper)
+## 🔬 Core Contributions
 
-1. **Multi-Modal Input Ingestion**: Ingests free-text clinical complaints, spoken audio via Automatic Speech Recognition (with word-level confidence propagation), high-resolution medical imaging, and digitized multi-format clinical lab reports.
+1. **Multi-Modal Input Ingestion**: Ingests free-text clinical complaints, spoken audio via Automatic Speech Recognition, high-resolution medical imaging, and digitized multi-format clinical lab reports.
 2. **9-Module Multi-Specialty Diagnostic Backbone**: Integrates nine validated machine learning and deep learning architectures covering metabolic, cardiovascular, oncological, hepatic, renal, dermatological, ophthalmic, and pulmonary conditions.
 3. **Fused Multi-Method Explainability (XAI)**: Replaces isolated single-method explanations with a fused evidence representation:
    - **Tabular**: Kernel/Tree SHAP, LIME, Counterfactuals (DiCE), Anchor explanations, and SHAP interaction values.
@@ -102,37 +102,37 @@ The system ingests **multi-modal patient inputs** (clinical text, spoken audio, 
 
 ## 📊 Empirical Diagnostic Performance Summary
 
-The benchmarked evaluation metrics across all 9 clinical diagnostic modules are summarized below:
+The benchmarked evaluation metrics across all 9 clinical diagnostic modules on held-out test sets are summarized below:
 
 | Module ID | Diagnostic Domain | Clinical Target | Architecture / Algorithm | Test Accuracy | Precision | Recall / Sens. | F1-Score | AUC-ROC | Artifact Bundle | Documentation |
 | :--- | :--- | :--- | :--- | :---: | :---: | :---: | :---: | :---: | :--- | :--- |
-| **M1** | Metabolic | Diabetes Mellitus | Soft-Voting Ensemble (RF+GB+LR) | **74.68%** | 0.77 | 0.75 | 0.74 | 0.82 | `diabetes_artifacts.zip` | [01_diabetes_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/01_diabetes_prediction.md) |
-| **M2** | Cardiology | Coronary Heart Disease | Logistic Regression + Scaler | **85.25%** | 0.86 | 0.85 | 0.85 | 0.90 | `heart_artifacts.zip` | [02_heart_disease_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/02_heart_disease_prediction.md) |
-| **M3** | Pulmonology | Pneumonia (Chest X-Ray) | Deep CNN with Dropout/BN | **90.38%** | 0.93 | 0.88 | 0.91 | 0.94 | `chest_xray_artifacts.zip` | [03_chest_xray_pneumonia_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/03_chest_xray_pneumonia_prediction.md) |
-| **M4** | Neuro-Oncology | Brain Tumor (4-Class MRI) | Xception Deep Transfer Learning | **95.25%** | 0.96 | 0.95 | 0.95 | 0.98 | `brain_tumor_artifacts.zip` | [04_brain_tumor_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/04_brain_tumor_prediction.md) |
-| **M5** | Oncology | Breast Cancer (FNA) | PCA + GridSearch LogReg / Ensemble | **95.91%** | 0.97 | 0.96 | 0.97 | 0.99 | `breast_cancer_artifacts.zip` | [05_breast_cancer_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/05_breast_cancer_prediction.md) |
-| **M6** | Hepatology | Liver Disease (LFT Panel) | Random Forest / GBDT / XGBoost | **72.10%** | 0.74 | 0.72 | 0.76 | 0.77 | `liver_disease_artifacts.zip` | [06_liver_disease_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/06_liver_disease_prediction.md) |
-| **M7** | Nephrology | Kidney Stone / Pathology (4-Class CT) | U-Net Classifier & EfficientNetB0 | **99.72%** | 1.00 | 1.00 | 1.00 | 1.00 | `kidney_stone_artifacts.zip` | [07_kidney_stone_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/07_kidney_stone_prediction.md) |
-| **M8** | Dermatology | Skin Cancer (7-Class HAM10000) | ResNet-50 Deep Transfer Learning | **88.40%** | 0.88 | 0.87 | 0.87 | 0.95 | `skin_cancer_artifacts.zip` | [08_skin_cancer_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/08_skin_cancer_prediction.md) |
-| **M9** | Ophthalmology | Retinal Eye Disease (Multi-Class) | PyTorch ResNet-18 Deep Transfer Learning | **93.75%** | 0.95 | 0.94 | 0.94 | 0.98 | `eye_disease_artifacts.zip` | [09_eye_disease_prediction.md](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/docs/09_eye_disease_prediction.md) |
+| **M1** | Metabolic | Diabetes Mellitus | Soft-Voting Ensemble (RF+GB+ET+LR) | **74.68%** | 0.75 | 0.75 | 0.74 | 0.82 | `models/diabetes_artifacts.zip` | [01_diabetes_prediction.md](docs/01_diabetes_prediction.md) |
+| **M2** | Cardiology | Coronary Heart Disease | Random Forest (100 Trees) | **98.54%** | 0.99 | 0.99 | 0.99 | 0.99 | `models/heart_artifacts.zip` | [02_heart_disease_prediction.md](docs/02_heart_disease_prediction.md) |
+| **M3** | Pulmonology | Pneumonia (Chest X-Ray) | Xception Deep Transfer Learning | **83.01%** | 0.84 | 0.83 | 0.83 | 0.91 | `models/chest_xray_artifacts.zip` | [03_chest_xray_pneumonia_prediction.md](docs/03_chest_xray_pneumonia_prediction.md) |
+| **M4** | Neuro-Oncology | Brain Tumor (4-Class MRI) | Xception Deep Transfer Network | **95.25%** | 0.96 | 0.95 | 0.95 | 0.98 | `models/brain_tumor_artifacts.zip` | [04_brain_tumor_prediction.md](docs/04_brain_tumor_prediction.md) |
+| **M5** | Oncology | Breast Cancer (FNA) | PCA + Tuned Logistic Regression / Ensemble | **96.49%** | 0.97 | 0.96 | 0.96 | 0.99 | `models/breast_cancer_artifacts.zip` | [05_breast_cancer_prediction.md](docs/05_breast_cancer_prediction.md) |
+| **M6** | Hepatology | Liver Disease (ILPD) | Random Forest / GBDT / XGBoost | **79.49%** | 0.80 | 0.79 | 0.79 | 0.84 | `models/liver_disease_artifacts.zip` | [06_liver_disease_prediction.md](docs/06_liver_disease_prediction.md) |
+| **M7** | Nephrology | Kidney Pathology (4-Class CT) | MobileNetV2, EfficientNetB0, U-Net | **99.25%** | 0.99 | 0.99 | 0.99 | 0.99 | `models/kidney_stone_artifacts.zip` | [07_kidney_stone_prediction.md](docs/07_kidney_stone_prediction.md) |
+| **M8** | Dermatology | Skin Cancer (7-Class HAM10000) | Deep 4-Block Hierarchical CNN | **97.98%** | 0.98 | 0.98 | 0.98 | 0.99 | `models/skin_cancer_artifacts.zip` | [08_skin_cancer_prediction.md](docs/08_skin_cancer_prediction.md) |
+| **M9** | Ophthalmology | Retinal Eye Disease (Multi-Class) | PyTorch ResNet-18 Transfer Learning | **90.78%** | 0.91 | 0.91 | 0.91 | 0.97 | `models/eye_disease_artifacts.zip` | [09_eye_disease_prediction.md](docs/09_eye_disease_prediction.md) |
 
 ---
 
 ## 📑 The 9 Diagnostic Modules & Research Notebook Suite
 
-All nine modules are organized with standardized research notebooks located in [`notebooks/`](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks):
+All nine modules are organized with standardized research notebooks located in [`notebooks/`](notebooks):
 
 | Module ID | Diagnostic Domain | Clinical Condition | Input Modality | Architecture / Algorithm | Research Notebook |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **M1** | **Metabolic** | Diabetes Mellitus | Tabular (Glucose, Insulin, BMI, BP, Age) | Soft-Voting Ensemble (RF + GradBoost + LR) | [Final_Diabetes_Prediction.ipynb](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Diabetes_Prediction.ipynb) |
-| **M2** | **Cardiology** | Coronary Heart Disease | Tabular (Resting BP, Chol, Max HR, ST Dep) | Logistic Regression + StandardScaler | [Final_Heart_Disease_Prediction.ipynb](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Heart_Disease_Prediction.ipynb) |
-| **M3** | **Pulmonology** | Pneumonia Detection | Chest Radiograph (224×224×3 RGB) | Deep Convolutional Neural Network | [Final_Chest_XRay_Prediction.ipynb](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Chest_XRay_Prediction.ipynb) |
-| **M4** | **Neuro-Oncology** | Cranial Brain Tumor (4-Class) | Cranial MRI (299×299×3 RGB) | Xception Deep Transfer Learning Network | [Final_Brain_Tumor_Prediction.ipynb](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Brain_Tumor_Prediction.ipynb) |
-| **M5** | **Oncology** | Breast Cancer (Benign / Malignant) | FNA Biopsy Tabular Features (30 metrics) | PCA + GridSearch Logistic Regression / Ensemble | [Final_Breast_Cancer_Prediction.ipynb](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Breast_Cancer_Prediction.ipynb) |
-| **M6** | **Hepatology** | Liver Disease | Tabular LFT (Bilirubin, Enzymes, Albumin) | Random Forest / GBDT / LR / XGBoost | [Final_Liver_Disease_Prediction.ipynb](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Liver_Disease_Prediction.ipynb) |
-| **M7** | **Nephrology** | Kidney Stone / Pathology (4-Class) | CT Scan / Radiography (150×150×3) | U-Net Classifier & EfficientNetB0 | [Final_Kidney_Stone_Prediction.ipynb](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Kidney_Stone_Prediction.ipynb) |
-| **M8** | **Dermatology** | Skin Cancer (7-Class HAM10000) | Dermoscopy Images (224×224×3 RGB) | ResNet-50 Deep Transfer Learning | [Final_Skin_Cancer_Prediction.ipynb](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Skin_Cancer_Prediction.ipynb) |
-| **M9** | **Ophthalmology** | Eye Disease (Multi-Class) | Retinal Fundus Images (224×224×3) | PyTorch ResNet-18 Deep Transfer Learning | [Final_Eye_Disease_Prediction.ipynb](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks/Final_Eye_Disease_Prediction.ipynb) |
+| **M1** | **Metabolic** | Diabetes Mellitus | Tabular (Glucose, Insulin, BMI, BP, Age) | Soft-Voting Ensemble (RF + GB + ET + LR) | [Final_Diabetes_Prediction.ipynb](notebooks/Final_Diabetes_Prediction.ipynb) |
+| **M2** | **Cardiology** | Coronary Heart Disease | Tabular (Resting BP, Chol, Max HR, ST Dep) | Random Forest Classifier (100 Trees) | [Final_Heart_Disease_Prediction.ipynb](notebooks/Final_Heart_Disease_Prediction.ipynb) |
+| **M3** | **Pulmonology** | Pneumonia Detection | Chest Radiograph (299×299×3 RGB) | Xception Deep Transfer Learning | [Final_Chest_XRay_Prediction.ipynb](notebooks/Final_Chest_XRay_Prediction.ipynb) |
+| **M4** | **Neuro-Oncology** | Cranial Brain Tumor (4-Class) | Cranial MRI (299×299×3 RGB) | Xception Deep Transfer Learning Network | [Final_Brain_Tumor_Prediction.ipynb](notebooks/Final_Brain_Tumor_Prediction.ipynb) |
+| **M5** | **Oncology** | Breast Cancer (Benign / Malignant) | FNA Biopsy Tabular Features (30 metrics) | PCA + Logistic Regression / Voting Ensemble | [Final_Breast_Cancer_Prediction.ipynb](notebooks/Final_Breast_Cancer_Prediction.ipynb) |
+| **M6** | **Hepatology** | Liver Disease | Tabular LFT (Bilirubin, Enzymes, Albumin) | Random Forest / GBDT / XGBoost | [Final_Liver_Disease_Prediction.ipynb](notebooks/Final_Liver_Disease_Prediction.ipynb) |
+| **M7** | **Nephrology** | Kidney Pathology (4-Class) | CT Scan / Radiography (150×150×3) | MobileNetV2, EfficientNetB0, U-Net | [Final_Kidney_Stone_Prediction.ipynb](notebooks/Final_Kidney_Stone_Prediction.ipynb) |
+| **M8** | **Dermatology** | Skin Cancer (7-Class HAM10000) | Dermoscopy Images (28×28×3 RGB) | Deep 4-Block Hierarchical CNN | [Final_Skin_Cancer_Prediction.ipynb](notebooks/Final_Skin_Cancer_Prediction.ipynb) |
+| **M9** | **Ophthalmology** | Eye Disease (Multi-Class) | Retinal Fundus Images (224×224×3) | PyTorch ResNet-18 Deep Transfer Learning | [Final_Eye_Disease_Prediction.ipynb](notebooks/Final_Eye_Disease_Prediction.ipynb) |
 
 ---
 
@@ -151,25 +151,12 @@ A cornerstone contribution of MedSynapse is **Evidence Fusion for LLM Grounding*
 The repository is structured to support both local development and cloud/Kaggle model training:
 
 ```
-Disease_Analizer/
-├── Structure for the paper.pdf   # Research paper blueprint, experimental setup & checklist
-├── requirements.txt              # Core Python dependencies
-├── README.md                     # Project documentation & paper overview
+MedSynapse/
+├── README.md                     # Project documentation & clinical paper overview
 ├── datasets/                     # Clinical training & benchmark datasets
 │   ├── brain tumor/              # Cranial MRI dataset (Glioma, Meningioma, Pituitary, No Tumor)
-│   │   ├── Training/             # 5,600+ labeled training scans
-│   │   └── Testing/              # 1,600+ benchmark evaluation scans
-│   ├── chest_xray/               # Pulmonary radiography dataset
-│   │   ├── train/                # 5,200+ radiographs (Normal vs Pneumonia)
-│   │   ├── val/                  # Validation split
-│   │   └── test/                 # Test evaluation set
+│   ├── chest_xray/               # Pulmonary radiography dataset (Normal vs Pneumonia)
 │   └── sample_reports/           # Multi-modal clinical reports for OCR & evaluation
-│       ├── 01_diabetic_high_risk_panel.{pdf,png,txt}
-│       ├── 02_cardiac_high_risk_panel.{pdf,png,txt}
-│       ├── 03_healthy_annual_wellness.{pdf,png,txt}
-│       ├── 04_prediabetic_borderline_report.{pdf,png,txt}
-│       ├── 05_sample_chest_xray.png
-│       └── 06_sample_brain_mri.png
 ├── docs/                         # Detailed clinical module documentation & empirical benchmark reports
 │   ├── README.md                 # Documentation portal & cross-module benchmark table
 │   ├── 01_diabetes_prediction.md
@@ -186,11 +173,11 @@ Disease_Analizer/
 │   ├── breast_cancer_artifacts.zip # PCA + Logistic Regression ensemble (.pkl)
 │   ├── chest_xray_artifacts.zip  # Pulmonary CNN weights (.h5, .keras)
 │   ├── diabetes_artifacts.zip    # Glycemic soft-voting ensemble & scaler (.pkl)
-│   ├── eye_disease_artifacts.zip # PyTorch ResNet-18 weights (.pth, .pt, class_dict)
+│   ├── eye_disease_artifacts.zip # PyTorch ResNet-18 weights (.pt, class_dict)
 │   ├── heart_artifacts.zip       # Cardiovascular model & scaler (.pkl)
-│   ├── kidney_stone_artifacts.zip# U-Net & EfficientNetB0 models (.keras, .h5)
+│   ├── kidney_stone_artifacts.zip# MobileNetV2 models (.keras, .h5)
 │   ├── liver_disease_artifacts.zip# Multi-model LFT estimators & scaler (.pkl)
-│   └── skin_cancer_artifacts.zip # ResNet50 / CNN dermoscopy weights (.keras, .h5)
+│   └── skin_cancer_artifacts.zip # 4-Block CNN dermoscopy weights (.keras, .h5)
 └── notebooks/                    # 9 standardized disease training & research notebooks
     ├── Final_Brain_Tumor_Prediction.ipynb
     ├── Final_Breast_Cancer_Prediction.ipynb
@@ -207,26 +194,11 @@ Disease_Analizer/
 
 ## ⚡ Kaggle Cloud Training & 1-Click Artifact Downloads
 
-All nine notebooks in [`notebooks/`](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks) are configured to execute in Kaggle GPU/TPU environments. Each notebook includes an automated serialization and packaging cell at the end that:
+All nine notebooks in [`notebooks/`](notebooks) are configured to execute in Kaggle GPU/TPU environments. Each notebook includes an automated serialization and packaging cell at the end that:
 - **Serializes the Best Model**: Automatically saves the highest-accuracy checkpoint (in `.keras`, `.h5`, or `.pkl` format).
 - **Preserves Preprocessing Transformers**: Dumps fitted `StandardScaler`, `PCA` transformers, and label index mappings (`classes.json`).
 - **Packages into a ZIP Archive**: Bundles all generated weights and artifacts into a single `.zip` file for 1-click download.
 - **Renders Clickable Browser Links**: Uses `IPython.display.FileLink` to provide direct download links right inside the Kaggle notebook output.
-
----
-
-## 📊 Research Paper Blueprint & Evaluation Checklist
-
-As outlined in [Structure for the paper.pdf](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/Structure%20for%20the%20paper.pdf), the project includes the following experimental evaluation plan:
-
-| Milestone / Deliverable | Target Metric / Evaluation Method | Status |
-| :--- | :--- | :--- |
-| **9 Disease Model Backbones** | Accuracy, Precision, Recall, F1-Score, AUC-ROC | ✅ Trained / In Notebooks |
-| **Multi-Method Explainability** | SHAP-vs-LIME rank correlation, Grad-CAM attention heatmaps | 🔄 Pipeline Integration |
-| **Uncertainty Calibration** | Expected Calibration Error (ECE), Conformal Prediction | 🔄 In Progress |
-| **Agentic Routing & Cross-Module Reasoning** | Route accuracy on multi-disease clinical vignettes | 🔄 In Progress |
-| **Guideline-Grounded Report Synthesis** | Grounding with medical corpora (AACE, AHA, WHO) | 🔄 In Progress |
-| **Clinical Report Quality Evaluation** | Human clinician rubric: Factual consistency, clarity, hallucination rate | 📋 Evaluation Design Ready |
 
 ---
 
@@ -239,15 +211,15 @@ As outlined in [Structure for the paper.pdf](file:///Users/shivammaurya/Desktop/
 ### 2️⃣ Clone Repository & Set Up Virtual Environment
 ```bash
 # Clone the repository
-git clone https://github.com/ShivamMaurya14/Disease_Analizer.git
-cd Disease_Analizer
+git clone https://github.com/ShivamMaurya14/MedSynapse.git
+cd MedSynapse
 
 # Create and activate virtual environment
 python3 -m venv venv
 source venv/bin/activate  # On Windows: venv\Scripts\activate
 
 # Install dependencies
-pip install -r requirements.txt
+pip install torch torchvision tensorflow scikit-learn pandas numpy matplotlib seaborn plotly
 ```
 
 ### 3️⃣ Running the Notebooks
@@ -257,7 +229,7 @@ jupyter lab
 # Or:
 jupyter notebook
 ```
-Navigate to [`notebooks/`](file:///Users/shivammaurya/Desktop/Projects/Disease_Analizer/notebooks) and open any model notebook (e.g. `Final_Diabetes_Prediction.ipynb` or `Final_Brain_Tumor_Prediction.ipynb`).
+Navigate to [`notebooks/`](notebooks) and open any model notebook (e.g. `Final_Diabetes_Prediction.ipynb` or `Final_Brain_Tumor_Prediction.ipynb`).
 
 ---
 
@@ -281,4 +253,3 @@ Navigate to [`notebooks/`](file:///Users/shivammaurya/Desktop/Projects/Disease_A
   year={2026}
 }
 ```
-

@@ -52,10 +52,17 @@ datasets/chest_xray/
 # Large Model Weights exceeding GitHub's 100MB limit
 # (Downloadable via Kaggle/Drive notebooks as documented)
 models/brain_tumor_model/*.keras
-models/Eye-model/*91.94.h5
 *.zip
 *.tar.gz
 *.h5.zip
+
+# Whitelist production model bundles under GitHub's 100MB limit
+!models/skin_cancer_artifacts.zip
+!models/kidney_stone_artifacts.zip
+!models/liver_disease_artifacts.zip
+!models/breast_cancer_artifacts.zip
+!models/diabetes_artifacts.zip
+!models/heart_artifacts.zip
 
 # Logs
 *.log
