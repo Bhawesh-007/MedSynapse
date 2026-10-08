@@ -49,9 +49,18 @@ Thumbs.db
 datasets/brain tumor/
 datasets/chest_xray/
 
-# Large Model Weights exceeding GitHub's 100MB limit
-# (Downloadable via Kaggle/Drive notebooks as documented)
+# Large Model Weights & Unpacked Artifacts
+# (Production bundles are maintained as zipped artifacts below)
 models/brain_tumor_model/*.keras
+models/*.pkl
+models/*.h5
+models/*.keras
+models/*.weights.h5
+models/*.png
+models/diabetes_artifacts/
+models/kidney_stone_classes.json
+models/metrics.json
+models/classes.json
 *.zip
 *.tar.gz
 *.h5.zip
@@ -84,3 +93,6 @@ dist/
 frontend/dist/
 .vite/
 frontend/.vite/
+
+# Output runs
+output/

@@ -136,13 +136,18 @@ export async function getModelRun(modelRunId) {
   return res.json();
 }
 
-export async function reviewModelRun(modelRunId, decision, reviewedBy, comment = '') {
+export async function reviewModelRun(modelRunId, decision, reviewedBy, comment = '', verifiedFeatures = null) {
   const res = await fetch(
     `${API_BASE_URL}/api/model-runs/${encodeURIComponent(modelRunId)}/review`,
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ decision, reviewed_by: reviewedBy, comment }),
+      body: JSON.stringify({
+        decision,
+        reviewed_by: reviewedBy,
+        comment,
+        verified_features: verifiedFeatures,
+      }),
     },
   );
   if (!res.ok) {

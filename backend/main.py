@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-from typing import Optional, Dict, Any, Literal
+from typing import Optional, Dict, Any, Literal, List
 
 # Ensure project root in sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -132,6 +132,7 @@ class ModelRunReviewInput(BaseModel):
     decision: Literal["approved", "rejected"]
     reviewed_by: str = Field(min_length=1, max_length=120)
     comment: Optional[str] = Field(default=None, max_length=2000)
+    verified_features: Optional[List[str]] = None
 
 
 def create_model_run_response(
@@ -659,6 +660,7 @@ def review_completed_model_run(model_run_id: str, payload: ModelRunReviewInput):
                 decision=payload.decision,
                 reviewed_by=payload.reviewed_by,
                 comment=payload.comment,
+                verified_features=payload.verified_features,
             ),
         }
     except LookupError as exc:

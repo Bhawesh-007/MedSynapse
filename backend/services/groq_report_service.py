@@ -117,6 +117,8 @@ class GroqReportService:
 
         instructions = (
             "Write a final clinician-reviewed screening report using only the approved JSON package below. "
+            "Highlight the clinician's review verification and explicitly describe the physician-verified "
+            "SHAP biomarker feature drivers from the explainability section. "
             "Do not change or invent model inputs, probability, prediction, SHAP values, Grad-CAM evidence, "
             "units, or clinician decision. Use a measurement unit only when that exact unit appears in the "
             "corresponding clinical_inputs item; omit the unit when it is null. Never say the patient has, "

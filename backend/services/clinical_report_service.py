@@ -33,6 +33,25 @@ class ClinicalReportService:
             "generator": "deterministic_template_v1",
             "sentences": self._explanation_sentences(explanation),
         }
+        prob = float(prediction.get("risk_probability", 0.0) or 0.0)
+        threshold = 0.5
+        is_positive = prob >= threshold
+        decision_label = prediction.get("prediction", prediction.get("diagnosis", "Positive" if is_positive else "Negative"))
+        risk_tier = prediction.get("risk_tier") or ("High Risk" if prob >= 0.70 else "Moderate Risk" if prob >= 0.35 else "Low Risk")
+
+        # Extract SHAP contributions if available for decision trace
+        base_value = explanation.get("base_value")
+        all_contribs = explanation.get("all_contributions", [])
+        pos_drivers = [
+            {"feature": item.get("feature"), "value": item.get("patient_value"), "shap_value": item.get("shap_value")}
+            for item in all_contribs if float(item.get("shap_value", 0.0)) > 0
+        ]
+        neg_drivers = [
+            {"feature": item.get("feature"), "value": item.get("patient_value"), "shap_value": item.get("shap_value")}
+            for item in all_contribs if float(item.get("shap_value", 0.0)) < 0
+        ]
+        net_shap = round(sum(float(item.get("shap_value", 0.0)) for item in all_contribs), 6) if all_contribs else None
+
         return {
             "report_version": "1.0",
             "report_id": report_id,
@@ -40,10 +59,10 @@ class ClinicalReportService:
             "screening": {
                 "disease": prediction.get("disease", disease_key),
                 "model_name": self._model_name(disease_key),
-                "prediction": prediction.get("prediction", prediction.get("diagnosis")),
-                "probability": prediction.get("risk_probability"),
-                "risk_tier": prediction.get("risk_tier"),
-                "decision_threshold": 0.5,
+                "prediction": decision_label,
+                "probability": prob,
+                "risk_tier": risk_tier,
+                "decision_threshold": threshold,
                 "input_source": feature_source,
                 "feature_extraction_id": feature_extraction_id,
             },
@@ -55,10 +74,16 @@ class ClinicalReportService:
                     "selected_model": self._model_name(disease_key),
                     "result": "routed",
                 },
-                "model_probability": prediction.get("risk_probability"),
-                "decision_threshold": 0.5,
-                "threshold_result": "positive" if prediction.get("risk_probability", 0) >= 0.5 else "negative",
-                "model_decision": prediction.get("prediction", prediction.get("diagnosis")),
+                "base_reference_score": base_value,
+                "positive_risk_drivers": pos_drivers,
+                "protective_risk_factors": neg_drivers,
+                "net_shap_displacement": net_shap,
+                "model_probability": prob,
+                "decision_threshold": threshold,
+                "threshold_evaluation": f"Probability {prob:.4f} {'≥' if is_positive else '<'} threshold {threshold:.2f} -> {decision_label}",
+                "threshold_result": "positive" if is_positive else "negative",
+                "risk_tier_classification": risk_tier,
+                "model_decision": decision_label,
             },
             "clinical_inputs": self._safe_inputs(disease_key, inputs),
             "model_output": prediction,
@@ -177,7 +202,7 @@ class ClinicalReportService:
 
     @staticmethod
     def _explanation_sentences(explanation: dict[str, Any]) -> list[str]:
-        """Translate explanation evidence without an LLM or clinical inference."""
+        """Translate explanation evidence into structured decision explanations without an LLM."""
         if explanation.get("status") != "available":
             reason = explanation.get("reason", "No explanation adapter produced evidence.")
             return [f"Model explanation is unavailable: {reason}"]
@@ -185,13 +210,36 @@ class ClinicalReportService:
         method = explanation.get("method") or "Model explanation"
         if "SHAP" in method:
             sentences = []
-            for item in explanation.get("all_contributions", [])[:5]:
-                shap_value = float(item.get("shap_value", 0.0))
-                direction = "increased" if shap_value >= 0 else "reduced"
+            base_value = explanation.get("base_value")
+            if base_value is not None:
                 sentences.append(
-                    f"{item.get('feature')} at {item.get('patient_value')} {direction} "
-                    f"the model's positive-class score (SHAP {shap_value:+.6f})."
+                    f"Baseline population reference score for this model is {float(base_value):+.4f}."
                 )
+            all_contributions = explanation.get("all_contributions", [])
+            pos_contribs = [item for item in all_contributions if float(item.get("shap_value", 0.0)) > 0]
+            neg_contribs = [item for item in all_contributions if float(item.get("shap_value", 0.0)) < 0]
+
+            if pos_contribs:
+                for item in pos_contribs:
+                    shap_value = float(item.get("shap_value", 0.0))
+                    val_str = f" of {item.get('patient_value')}" if item.get('patient_value') is not None else ""
+                    sentences.append(
+                        f"Elevating risk factor: {item.get('feature')}{val_str} increased the predicted positive-class score (SHAP {shap_value:+.6f})."
+                    )
+            if neg_contribs:
+                for item in neg_contribs:
+                    shap_value = float(item.get("shap_value", 0.0))
+                    val_str = f" of {item.get('patient_value')}" if item.get('patient_value') is not None else ""
+                    sentences.append(
+                        f"Mitigating/protective factor: {item.get('feature')}{val_str} reduced the predicted positive-class score (SHAP {shap_value:+.6f})."
+                    )
+
+            if all_contributions:
+                net_disp = sum(float(item.get("shap_value", 0.0)) for item in all_contributions)
+                sentences.append(
+                    f"Net SHAP feature displacement from baseline is {net_disp:+.6f}."
+                )
+
             sentences.append(
                 "SHAP describes this model's behavior for the submitted input and does not establish medical causality."
             )

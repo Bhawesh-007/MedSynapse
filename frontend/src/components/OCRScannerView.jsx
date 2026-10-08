@@ -1,6 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, FileText, CheckCircle2, AlertCircle, Sparkles, ArrowRight, Play, RefreshCw, FileCode, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import {
+  Upload,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  Sparkles,
+  ArrowRight,
+  Play,
+  RefreshCw,
+  FileCode,
+  Check,
+  Database,
+  ShieldCheck,
+  Cpu,
+} from 'lucide-react';
 import { parseReportOCR, getSampleReports } from '../services/api';
+import OCRProgressModal from './OCRProgressModal';
 
 export default function OCRScannerView({ onApplyParams, setTab }) {
   const [file, setFile] = useState(null);
@@ -11,7 +26,21 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
   const [ocrResult, setOcrResult] = useState(null);
   const [sampleReports, setSampleReports] = useState([]);
   const [selectedSampleId, setSelectedSampleId] = useState('');
-  const [diseaseType, setDiseaseType] = useState('all');
+
+  // OCR Modal progress states
+  const [ocrModalOpen, setOcrModalOpen] = useState(false);
+  const [ocrStage, setOcrStage] = useState('upload_reading');
+  const [ocrModalError, setOcrModalError] = useState(null);
+  const timeoutsRef = useRef([]);
+
+  const clearProgressTimeouts = () => {
+    timeoutsRef.current.forEach(t => clearTimeout(t));
+    timeoutsRef.current = [];
+  };
+
+  useEffect(() => {
+    return () => clearProgressTimeouts();
+  }, []);
 
   // Load sample clinical reports on mount
   useEffect(() => {
@@ -49,15 +78,41 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
 
     setLoading(true);
     setError(null);
+    setOcrModalError(null);
+    setOcrStage('upload_reading');
+    setOcrModalOpen(true);
+    clearProgressTimeouts();
+
+    // Stage 1 -> 2 transition at ~1.5s
+    const t1 = setTimeout(() => {
+      setOcrStage('ocr_extraction');
+    }, 1500);
+
+    // Stage 2 -> 3 (Gemma) transition at ~4.5s
+    const t2 = setTimeout(() => {
+      setOcrStage('gemma_extraction');
+    }, 4500);
+
+    timeoutsRef.current = [t1, t2];
+
     try {
       const res = await parseReportOCR({
         file: uploadFile,
         rawText: uploadFile ? '' : textInput,
-        diseaseType
+        diseaseType: 'all',
       });
-      setOcrResult(res);
+      clearProgressTimeouts();
+      setOcrStage('feature_store_saving');
+
+      setTimeout(() => {
+        setOcrResult(res);
+        setOcrStage('complete');
+      }, 500);
     } catch (err) {
-      setError(err.message || 'Failed to process document OCR');
+      clearProgressTimeouts();
+      const message = err.message || 'Failed to process document OCR';
+      setError(message);
+      setOcrModalError(message);
     } finally {
       setLoading(false);
     }
@@ -82,18 +137,27 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <OCRProgressModal
+        isOpen={ocrModalOpen}
+        stage={ocrStage}
+        error={ocrModalError}
+        onClose={() => setOcrModalOpen(false)}
+        diseaseType="all"
+        filename={file?.name || (selectedSampleId ? `Sample: ${selectedSampleId}` : 'Clinical Text Input')}
+      />
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span className="badge badge-cyan">Intelligent OCR Engine</span>
-            <span className="badge badge-success">Tesseract 5.0 + PyMuPDF</span>
+            <span className="badge badge-cyan">Universal Feature Extraction Hub</span>
+            <span className="badge badge-success">Tesseract 5.0 + Gemma 3:4B + SQLite</span>
           </div>
           <h1 style={{ fontSize: '2rem', fontWeight: 800, color: '#ffffff', marginTop: '6px' }}>
-            Medical Lab Report Scanner & Document Parser
+            Clinical Feature Extraction & Database Store
           </h1>
           <p style={{ fontSize: '0.95rem', color: 'var(--text-secondary)', marginTop: '4px' }}>
-            Upload patient reports (PDF or Images). MedSynapse extracts clinical biomarkers, normal ranges, and auto-populates ML models.
+            Upload clinical reports (PDF or Images) or input lab text. MedSynapse extracts all clinical biomarkers, performs Gemma 3:4B neural extraction, and persists validated feature records into the local SQLite feature store.
           </p>
         </div>
       </div>
@@ -132,17 +196,6 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
             </button>
           ))}
         </div>
-      </div>
-
-      <div className="glass-panel" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
-        <label className="form-label" htmlFor="ocr-disease-type">Target extraction pipeline</label>
-        <select id="ocr-disease-type" className="form-select" value={diseaseType} onChange={event => setDiseaseType(event.target.value)} style={{ maxWidth: '300px' }}>
-          <option value="all">General report (Diabetes / Heart)</option>
-          <option value="diabetes">Diabetes feature pipeline</option>
-          <option value="heart">Coronary heart feature pipeline</option>
-          <option value="breast">Breast cancer WDBC FNA pipeline</option>
-        </select>
-        {diseaseType === 'breast' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Use a pathology/FNA report containing all 30 morphology measurements.</span>}
       </div>
 
       {/* Upload Zone & Manual Text Entry */}
@@ -215,12 +268,12 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
             {loading ? (
               <>
                 <RefreshCw size={16} className="animate-spin" />
-                <span>Running Optical Character Recognition...</span>
+                <span>Running Universal Feature Extraction...</span>
               </>
             ) : (
               <>
                 <Play size={16} />
-                <span>Scan & Extract Clinical Parameters</span>
+                <span>Extract Features & Save to Database</span>
               </>
             )}
           </button>
@@ -258,7 +311,7 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
           />
 
           <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
-            💡 <em>Tip: The parser automatically identifies Glucose, Blood Pressure, BMI, Insulin, Cholesterol, Heart Rate, ECG, and Age.</em>
+            💡 <em>Tip: The parser automatically identifies Glucose, Blood Pressure, BMI, Insulin, Cholesterol, Heart Rate, ECG, and Age across all diagnostic modalities.</em>
           </div>
         </div>
       </div>
@@ -283,14 +336,58 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
       {/* Extracted Parameters Results Section */}
       {ocrResult && (
         <div className="glass-panel glass-panel-glow animate-fade-in" style={{ padding: '1.75rem' }}>
+          
+          {/* Database Persistence & Feature Store Status Banner */}
+          <div style={{
+            marginBottom: '1.5rem',
+            padding: '1.1rem 1.25rem',
+            borderRadius: '12px',
+            background: '#f0fdf4',
+            border: '1px solid #bbf7d0',
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px'
+          }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <Database size={18} color="#16a34a" />
+                <strong style={{ color: '#166534', fontSize: '0.92rem' }}>
+                  Features Persisted to SQLite Feature Store (`data/medsynapse.db`)
+                </strong>
+              </div>
+              <span className="badge badge-success" style={{ fontSize: '0.72rem' }}>
+                <ShieldCheck size={12} /> Immutable Audit Ledger
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '1.5rem', flexWrap: 'wrap', fontSize: '0.78rem', color: '#1e3a2b', marginTop: '2px' }}>
+              {ocrResult.feature_extraction_id && (
+                <div>
+                  <strong>Diabetes Feature Extraction ID:</strong>{' '}
+                  <code style={{ background: '#dcfce7', padding: '2px 6px', borderRadius: '4px', fontFamily: 'var(--font-mono)' }}>
+                    {ocrResult.feature_extraction_id}
+                  </code>
+                </div>
+              )}
+              {ocrResult.heart_feature_extraction_id && (
+                <div>
+                  <strong>Heart Feature Extraction ID:</strong>{' '}
+                  <code style={{ background: '#dcfce7', padding: '2px 6px', borderRadius: '4px', fontFamily: 'var(--font-mono)' }}>
+                    {ocrResult.heart_feature_extraction_id}
+                  </code>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* JEV Evidence Suitability Scoring */}
           {Array.isArray(ocrResult.jev_scoring) && (
             <div style={{ marginBottom: '1.5rem', paddingBottom: '1.25rem', borderBottom: '1px solid var(--border-card)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '0.35rem' }}>
                 <span className="badge badge-purple">JEV Evidence Suitability</span>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Routing signal, not diagnostic accuracy</span>
+                <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Routing signal based on extracted biomarker completeness</span>
               </div>
               <p style={{ fontSize: '0.82rem', color: 'var(--text-secondary)', marginBottom: '0.9rem' }}>
-                Scores show how complete and reliable the extracted evidence is for each disease pipeline.
+                Scores indicate completeness and clinical suitability of extracted features for each downstream prediction model:
               </p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '0.75rem' }}>
                 {ocrResult.jev_scoring.map(score => (
@@ -309,21 +406,8 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
               </div>
             </div>
           )}
-          {ocrResult.gemma_heart && (
-            <div style={{ marginBottom: '1.5rem', padding: '0.9rem', border: '1px solid var(--border-card)', borderRadius: '10px', background: '#f5faf6' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-                <strong style={{ color: 'var(--text-primary)' }}>Gemma coronary feature extraction</strong>
-                <span className={`badge ${ocrResult.gemma_heart.status === 'ready_for_inference' ? 'badge-success' : 'badge-warning'}`}>
-                  {ocrResult.gemma_heart.status}
-                </span>
-              </div>
-              {ocrResult.gemma_heart.missing_or_unverified?.length > 0 && (
-                <div style={{ marginTop: '6px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
-                  Missing or review-required: {ocrResult.gemma_heart.missing_or_unverified.join(', ')}
-                </div>
-              )}
-            </div>
-          )}
+
+          {/* Extracted Parameters Header & Transfer Actions */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem', borderBottom: '1px solid rgba(255, 255, 255, 0.08)', paddingBottom: '1rem' }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -373,14 +457,6 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
               )}
             </div>
           </div>
-
-          {ocrResult.gemma_breast_cancer && (
-            <div style={{ marginTop: '1rem', padding: '0.9rem', border: '1px solid var(--border-card)', borderRadius: '10px', background: '#f5faf6' }}>
-              <strong style={{ color: 'var(--text-primary)' }}>Breast WDBC Feature Extraction</strong>
-              <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginTop: '4px' }}>{ocrResult.gemma_breast_cancer.message}</div>
-              {ocrResult.gemma_breast_cancer.missing_or_unverified?.length > 0 && <div style={{ fontSize: '0.75rem', color: '#b42318', marginTop: '6px' }}>Missing or unverified: {ocrResult.gemma_breast_cancer.missing_or_unverified.join(', ')}</div>}
-            </div>
-          )}
 
           {/* Grid of Extracted Parameter Cards */}
           <div style={{

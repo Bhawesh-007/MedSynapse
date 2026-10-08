@@ -124,6 +124,7 @@ def initialize_database() -> Path:
                 decision TEXT NOT NULL CHECK (decision IN ('approved', 'rejected')),
                 reviewed_by TEXT NOT NULL,
                 comment TEXT,
+                verified_features_json TEXT,
                 created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                 FOREIGN KEY (model_run_id) REFERENCES model_runs(id)
             );
@@ -153,6 +154,14 @@ def initialize_database() -> Path:
                 connection.execute(
                     f"ALTER TABLE feature_extractions ADD COLUMN {column_name} {column_type}"
                 )
+        
+        decision_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(clinician_decisions)")
+        }
+        if "verified_features_json" not in decision_columns:
+            connection.execute(
+                "ALTER TABLE clinician_decisions ADD COLUMN verified_features_json TEXT"
+            )
     return get_database_path()
 
 
@@ -386,7 +395,7 @@ def load_model_run(model_run_id: str) -> dict:
         ).fetchone()
         decision = connection.execute(
             """
-            SELECT id, decision, reviewed_by, comment, created_at
+            SELECT id, decision, reviewed_by, comment, verified_features_json, created_at
             FROM clinician_decisions
             WHERE model_run_id = ?
             ORDER BY created_at DESC, rowid DESC LIMIT 1
@@ -409,6 +418,14 @@ def load_model_run(model_run_id: str) -> dict:
         llm_report = json.loads(final_report["llm_report_json"]) if final_report else None
     except json.JSONDecodeError as exc:
         raise ValueError("Stored model-run evidence is corrupted.") from exc
+
+    verified_features = None
+    if decision and decision["verified_features_json"]:
+        try:
+            verified_features = json.loads(decision["verified_features_json"])
+        except Exception:
+            verified_features = None
+
     return {
         "id": row["id"],
         "disease_type": row["disease_type"],
@@ -422,6 +439,7 @@ def load_model_run(model_run_id: str) -> dict:
                 "decision": decision["decision"],
                 "reviewed_by": decision["reviewed_by"],
                 "comment": decision["comment"],
+                "verified_features": verified_features,
                 "created_at": decision["created_at"],
             }
             if decision else None
@@ -439,14 +457,21 @@ def review_model_run(
     decision: str,
     reviewed_by: str,
     comment: str | None = None,
+    verified_features: list[str] | None = None,
 ) -> dict:
-    """Record the doctor's post-model approval or rejection decision."""
+    """Record the doctor's post-model approval or rejection decision and verified SHAP features."""
     if decision not in {"approved", "rejected"}:
         raise ValueError("Model-run decision must be approved or rejected.")
     reviewed_by = reviewed_by.strip()
     if not reviewed_by:
         raise ValueError("The clinician reviewer name or identifier is required.")
     normalized_comment = comment.strip() if comment and comment.strip() else None
+    verified_features_json = (
+        json.dumps(verified_features, separators=(",", ":"), ensure_ascii=False)
+        if verified_features is not None
+        else None
+    )
+
     with get_connection() as connection:
         row = connection.execute(
             "SELECT workflow_status FROM model_runs WHERE id = ?",
@@ -460,10 +485,17 @@ def review_model_run(
         connection.execute(
             """
             INSERT INTO clinician_decisions (
-                id, model_run_id, decision, reviewed_by, comment
-            ) VALUES (?, ?, ?, ?, ?)
+                id, model_run_id, decision, reviewed_by, comment, verified_features_json
+            ) VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (decision_id, model_run_id, decision, reviewed_by, normalized_comment),
+            (
+                decision_id,
+                model_run_id,
+                decision,
+                reviewed_by,
+                normalized_comment,
+                verified_features_json,
+            ),
         )
         connection.execute(
             """
@@ -485,15 +517,45 @@ def build_approved_report_package(model_run_id: str) -> dict:
     decision = model_run["clinician_decision"]
     if model_run["workflow_status"] != "clinician_approved" or not decision:
         raise ValueError("Final report generation requires an approved clinician decision.")
+    
+    # Filter explainability to only include clinician-verified SHAP features if specified
+    explainability = json.loads(json.dumps(model_run["clinical_report"].get("explainability", {})))
+    verified_features = decision.get("verified_features")
+    
+    if verified_features is not None and isinstance(verified_features, list) and explainability:
+        verified_set = set(verified_features)
+        if "all_contributions" in explainability:
+            explainability["all_contributions"] = [
+                item for item in explainability["all_contributions"]
+                if item.get("feature") in verified_set
+            ]
+        if "top_positive_contributors" in explainability:
+            explainability["top_positive_contributors"] = [
+                item for item in explainability["top_positive_contributors"]
+                if item.get("feature") in verified_set
+            ]
+        if "top_negative_contributors" in explainability:
+            explainability["top_negative_contributors"] = [
+                item for item in explainability["top_negative_contributors"]
+                if item.get("feature") in verified_set
+            ]
+        explainability["clinician_verified_feature_names"] = verified_features
+
     return {
         "model_run_id": model_run["id"],
         "disease_type": model_run["disease_type"],
         "feature_extraction_id": model_run["feature_extraction_id"],
         "prediction": model_run["prediction"],
         "clinical_inputs": model_run["clinical_report"].get("clinical_inputs", []),
-        "explainability": model_run["clinical_report"].get("explainability", {}),
+        "explainability": explainability,
         "safety": model_run["clinical_report"].get("safety", {}),
         "clinician_decision": decision,
+        "clinician_verification": {
+            "verified_by": decision["reviewed_by"],
+            "decision": decision["decision"],
+            "verified_shap_features": verified_features,
+            "clinical_comment": decision.get("comment"),
+        },
     }
 
 

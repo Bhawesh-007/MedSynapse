@@ -1,90 +1,97 @@
 import React, { useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Check,
   Circle,
   FileCheck,
   LoaderCircle,
-  ShieldCheck,
   Sparkles,
   X,
   XCircle,
+  ArrowRight,
+  Activity,
 } from 'lucide-react';
 
 const STEPS = [
   {
     key: 'input',
-    title: 'Clinical features submitted',
-    description: 'The validated nine-feature diabetes input has been sent securely.',
+    number: '01',
+    title: 'Clinical Features Submitted',
+    description: 'Patient biomarkers and report parameters validated securely.',
   },
   {
     key: 'prediction',
-    title: 'Prediction and SHAP explanation',
-    description: 'The diabetes ensemble and explainability adapter run in one backend request.',
+    number: '02',
+    title: 'Ensemble Prediction & SHAP Analysis',
+    description: 'Voting classifier calculates risk score and SHAP feature contributions.',
   },
   {
     key: 'review',
-    title: 'Clinician review',
-    description: 'The doctor reviews the prediction, SHAP evidence, and generated explanation.',
+    number: '03',
+    title: 'Clinician Verification & Review',
+    description: 'Attending physician audits AI predictions and explanation evidence.',
   },
   {
     key: 'groq',
-    title: 'Groq final-report generation',
-    description: 'Only approved evidence is sent to the configured Groq model.',
+    number: '04',
+    title: 'Clinical Synthesis & Report Generation',
+    description: 'Structured LLM synthesis generates the final verified diagnostic report.',
   },
   {
     key: 'complete',
-    title: 'Final report persisted',
-    description: 'The validated report is locked and ready for display or export.',
+    number: '05',
+    title: 'Diagnostic Report Finalized',
+    description: 'Immutable record stored in local clinical feature store.',
   },
 ];
 
 const STAGE_COPY = {
   prediction_running: {
-    eyebrow: 'Diabetes analysis in progress',
-    title: 'Running prediction and explainability',
-    message: 'The backend is calculating diabetes risk and all nine SHAP contributions.',
+    eyebrow: 'Analysis In Progress',
+    title: 'Calculating Risk & Explainability',
+    message: 'The AI ensemble is evaluating patient indicators and computing exact SHAP feature attributions.',
     currentIndex: 1,
   },
   awaiting_review: {
-    eyebrow: 'Model analysis complete',
-    title: 'Waiting for clinician review',
-    message: 'The prediction and explanation are ready. Continue to inspect and approve or reject the result.',
+    eyebrow: 'Model Analysis Complete',
+    title: 'Ready for Clinician Review',
+    message: 'Diagnostic risk score and explainability weights are ready for medical audit.',
     currentIndex: 2,
   },
   review_saving: {
-    eyebrow: 'Recording clinician decision',
-    title: 'Saving the review decision',
-    message: 'The clinician identity, decision, and comment are being added to the audit record.',
+    eyebrow: 'Auditing Decision',
+    title: 'Saving Review Record',
+    message: 'Recording clinician verification decision and comments into the audit ledger.',
     currentIndex: 2,
   },
   approved: {
-    eyebrow: 'Clinician approval recorded',
-    title: 'Ready for final report generation',
-    message: 'The approved prediction and exact SHAP evidence can now be sent to Groq.',
+    eyebrow: 'Clinician Approved',
+    title: 'Generating Final Report',
+    message: 'Approved evidence is being formatted for diagnostic synthesis.',
     currentIndex: 3,
   },
   rejected: {
-    eyebrow: 'Clinician rejection recorded',
-    title: 'Final report generation stopped',
-    message: 'The decision was rejected, so no evidence will be sent to Groq.',
+    eyebrow: 'Review Rejected',
+    title: 'Pipeline Halted',
+    message: 'The assessment was rejected by clinician. Report generation has stopped.',
     currentIndex: 2,
   },
   groq_generating: {
-    eyebrow: 'Approved evidence only',
-    title: 'Groq is generating the final report',
-    message: 'The response will be schema-validated and persisted before it is shown.',
+    eyebrow: 'Synthesis In Progress',
+    title: 'Generating Clinical Summary',
+    message: 'Synthesizing comprehensive diagnostic findings from approved evidence.',
     currentIndex: 3,
   },
   complete: {
-    eyebrow: 'Pipeline completed',
-    title: 'Final report is ready',
-    message: 'The clinician-approved Groq report has been validated, saved, and locked.',
+    eyebrow: 'Pipeline Complete',
+    title: 'Final Diagnostic Report Ready',
+    message: 'Validated, clinician-approved diagnostic report is locked and available.',
     currentIndex: 4,
   },
   error: {
-    eyebrow: 'Pipeline interrupted',
-    title: 'The current stage could not finish',
-    message: 'Review the error below and retry when the underlying issue is resolved.',
+    eyebrow: 'Pipeline Interrupted',
+    title: 'Stage Encountered an Error',
+    message: 'An issue occurred during processing. Please review details below.',
     currentIndex: 1,
   },
 };
@@ -111,11 +118,35 @@ function stepStatus(stepIndex, stage, failedAt) {
   return 'pending';
 }
 
+function StatusBadge({ status }) {
+  if (status === 'complete') {
+    return <span className="pipeline-step-badge is-complete">Completed</span>;
+  }
+  if (status === 'active') {
+    return (
+      <span className="pipeline-step-badge is-active">
+        <span className="pipeline-pulse-dot" />
+        In Progress
+      </span>
+    );
+  }
+  if (status === 'current') {
+    return <span className="pipeline-step-badge is-current">Action Required</span>;
+  }
+  if (status === 'error') {
+    return <span className="pipeline-step-badge is-error">Failed</span>;
+  }
+  if (status === 'rejected') {
+    return <span className="pipeline-step-badge is-rejected">Rejected</span>;
+  }
+  return <span className="pipeline-step-badge is-pending">Queued</span>;
+}
+
 function StepIcon({ status }) {
-  if (status === 'complete') return <Check size={16} />;
-  if (status === 'active') return <LoaderCircle size={16} className="animate-spin" />;
-  if (status === 'error' || status === 'rejected') return <XCircle size={16} />;
-  return <Circle size={13} />;
+  if (status === 'complete') return <Check size={16} strokeWidth={2.5} />;
+  if (status === 'active') return <LoaderCircle size={17} className="animate-spin" />;
+  if (status === 'error' || status === 'rejected') return <XCircle size={16} strokeWidth={2.5} />;
+  return <Circle size={11} fill="currentColor" opacity={0.4} />;
 }
 
 export default function DiabetesPipelineProgressModal({
@@ -128,7 +159,7 @@ export default function DiabetesPipelineProgressModal({
   const copy = STAGE_COPY[stage] || STAGE_COPY.prediction_running;
   const progress = useMemo(() => {
     if (stage === 'rejected' || stage === 'error') return null;
-    return Math.max(10, ((copy.currentIndex + (stage === 'complete' ? 1 : 0)) / STEPS.length) * 100);
+    return Math.max(12, Math.min(100, ((copy.currentIndex + (stage === 'complete' ? 1 : 0)) / STEPS.length) * 100));
   }, [copy.currentIndex, stage]);
 
   useEffect(() => {
@@ -151,78 +182,113 @@ export default function DiabetesPipelineProgressModal({
   const isComplete = stage === 'complete';
   const isRejected = stage === 'rejected';
 
-  return (
-    <div className="pipeline-modal-backdrop" role="presentation">
+  const modalContent = (
+    <div className="pipeline-modal-backdrop" role="presentation" onClick={!isActive ? onClose : undefined}>
       <section
         className="pipeline-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="diabetes-pipeline-title"
         aria-describedby="diabetes-pipeline-message"
+        onClick={e => e.stopPropagation()}
       >
         {!isActive && (
-          <button className="pipeline-modal-close" type="button" onClick={onClose} aria-label="Close pipeline status">
-            <X size={19} />
+          <button className="pipeline-modal-close" type="button" onClick={onClose} aria-label="Close pipeline dialog">
+            <X size={18} />
           </button>
         )}
 
+        {/* Header section */}
         <header className="pipeline-modal-header">
-          <div className={`pipeline-modal-symbol ${stage === 'error' || isRejected ? 'is-error' : isComplete ? 'is-complete' : ''}`}>
+          <div className={`pipeline-modal-symbol ${stage === 'error' || isRejected ? 'is-error' : isComplete ? 'is-complete' : isActive ? 'is-active' : ''}`}>
             {stage === 'error' || isRejected
-              ? <XCircle size={25} />
+              ? <XCircle size={24} />
               : isComplete
-                ? <FileCheck size={25} />
+                ? <FileCheck size={24} />
                 : stage === 'groq_generating'
-                  ? <Sparkles size={25} />
-                  : <ShieldCheck size={25} />}
+                  ? <Sparkles size={24} />
+                  : <Activity size={24} />}
           </div>
-          <div>
-            <p className="pipeline-modal-eyebrow">{copy.eyebrow}</p>
+          <div className="pipeline-modal-titles">
+            <div className="pipeline-modal-eyebrow-row">
+              <p className="pipeline-modal-eyebrow">{copy.eyebrow}</p>
+              {progress !== null && (
+                <span className="pipeline-modal-pct">{Math.round(progress)}% Complete</span>
+              )}
+            </div>
             <h2 id="diabetes-pipeline-title">{copy.title}</h2>
             <p id="diabetes-pipeline-message">{copy.message}</p>
           </div>
         </header>
 
+        {/* Progress bar track */}
         {progress !== null && (
           <div className="pipeline-progress-track" aria-label={`Pipeline progress ${Math.round(progress)} percent`}>
-            <span style={{ width: `${progress}%` }} />
+            <span
+              className={`pipeline-progress-fill ${isActive ? 'is-animated' : ''}`}
+              style={{ width: `${progress}%` }}
+            />
           </div>
         )}
 
+        {/* Step list */}
         <div className="pipeline-step-list" aria-live="polite">
           {STEPS.map((step, index) => {
             const status = stepStatus(index, stage, failedAt);
             return (
               <div className={`pipeline-step is-${status}`} key={step.key}>
-                <div className="pipeline-step-icon"><StepIcon status={status} /></div>
-                <div>
-                  <h3>{step.title}</h3>
+                <div className="pipeline-step-icon">
+                  <StepIcon status={status} />
+                </div>
+                <div className="pipeline-step-content">
+                  <div className="pipeline-step-title-row">
+                    <span className="pipeline-step-num">{step.number}</span>
+                    <h3>{step.title}</h3>
+                  </div>
                   <p>{step.description}</p>
+                </div>
+                <div className="pipeline-step-badge-wrap">
+                  <StatusBadge status={status} />
                 </div>
               </div>
             );
           })}
         </div>
 
-        {error && <div className="pipeline-modal-error">{error}</div>}
+        {error && (
+          <div className="pipeline-modal-error">
+            <XCircle size={16} className="flex-shrink-0" />
+            <div>
+              <strong>Error Encountered:</strong> {error}
+            </div>
+          </div>
+        )}
 
+        {/* Modal footer with action button */}
         <footer className="pipeline-modal-footer">
-          <span>
-            {isActive ? 'Please keep this window open while the current request finishes.' : 'The audit record is updated at every completed backend stage.'}
+          <span className="pipeline-modal-footer-note">
+            {isActive
+              ? '⚡ Processing clinical pipeline... Please keep this window open.'
+              : 'Audit trail is preserved for medical record compliance.'}
           </span>
           {!isActive && (
-            <button className="btn-primary" type="button" onClick={onClose}>
-              {stage === 'awaiting_review'
-                ? 'Review model result'
-                : stage === 'approved'
-                  ? 'Continue to final report'
-                  : isComplete
-                    ? 'View final report'
-                    : 'Close'}
+            <button className="btn-primary pipeline-action-btn" type="button" onClick={onClose}>
+              <span>
+                {stage === 'awaiting_review'
+                  ? 'Review Model Result'
+                  : stage === 'approved'
+                    ? 'Generate Final Report'
+                    : isComplete
+                      ? 'View Final Report'
+                      : 'Close'}
+              </span>
+              <ArrowRight size={16} />
             </button>
           )}
         </footer>
       </section>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

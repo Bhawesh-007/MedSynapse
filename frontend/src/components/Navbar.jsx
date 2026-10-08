@@ -4,7 +4,7 @@ import { Activity, FileText, Heart, Droplets, Scan, Eye, Ribbon, RefreshCw } fro
 export default function Navbar({ currentTab, setTab, systemStatus, onRefreshStatus }) {
   const tabs = [
     { id: 'home', label: 'Dashboard Hub', icon: Activity, color: '#25854a' },
-    { id: 'ocr', label: 'Smart Report OCR', icon: FileText, highlight: true, color: '#25854a' },
+    { id: 'ocr', label: 'Feature Extraction', icon: FileText, highlight: true, color: '#25854a' },
     { id: 'diabetes', label: 'Diabetes Engine', icon: Droplets, color: '#b42318' },
     { id: 'heart', label: 'Cardiac Health', icon: Heart, color: '#c81e1e' },
     { id: 'xray', label: 'Pneumonia X-Ray', icon: Scan, color: '#287a89' },
