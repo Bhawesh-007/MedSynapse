@@ -59,7 +59,15 @@ class GemmaService:
     ) -> None:
         self.base_url = (base_url or os.getenv("GEMMA_BASE_URL", "http://127.0.0.1:11434")).rstrip("/")
         self.model_name = model_name or os.getenv("GEMMA_MODEL", "")
-        self.timeout_seconds = timeout_seconds or float(os.getenv("GEMMA_TIMEOUT_SECONDS", "45"))
+        # Structured extraction with a local 4B model can take longer than a
+        # normal HTTP request, especially on a CPU-only machine or after the
+        # model has been unloaded.  The previous 45-second default aborted a
+        # valid generation before Ollama could finish.
+        self.timeout_seconds = (
+            timeout_seconds
+            if timeout_seconds is not None
+            else float(os.getenv("GEMMA_TIMEOUT_SECONDS", "180"))
+        )
 
     @property
     def configured(self) -> bool:
@@ -202,17 +210,37 @@ class GemmaService:
             raise GemmaServiceError(
                 f"Cannot reach local Gemma at {self.base_url}: {exc.reason}"
             ) from exc
-        except (TimeoutError, json.JSONDecodeError) as exc:
-            raise GemmaServiceError("Gemma service returned an unreadable response") from exc
+        except TimeoutError as exc:
+            raise GemmaServiceError(
+                f"Gemma generation exceeded the {self.timeout_seconds:g}-second timeout"
+            ) from exc
+        except json.JSONDecodeError as exc:
+            raise GemmaServiceError("Gemma service returned invalid response JSON") from exc
 
         generated_json = body.get("response") if isinstance(body, dict) else None
         if not isinstance(generated_json, str):
             raise GemmaServiceError("Gemma response did not contain a JSON string in 'response'")
 
+        # Ollama's structured-output format forces clean JSON, but strip markdown
+        # code fences defensively in case the schema is bypassed (e.g. after a
+        # model update) so a fenced response doesn't turn into a cryptic error.
+        stripped = generated_json.strip()
+        if stripped.startswith("```"):
+            # Remove opening fence (```json or ```) and closing fence (```)
+            stripped = stripped.split("\n", 1)[-1]
+            if stripped.endswith("```"):
+                stripped = stripped[: stripped.rfind("```")]
+            stripped = stripped.strip()
+        else:
+            stripped = generated_json
+
         try:
-            parsed = json.loads(generated_json)
+            parsed = json.loads(stripped)
         except json.JSONDecodeError as exc:
-            raise GemmaServiceError("Gemma response was not valid JSON") from exc
+            snippet = stripped[:120].replace("\n", "\\n")
+            raise GemmaServiceError(
+                f"Gemma returned non-JSON text (first 120 chars): {snippet!r}"
+            ) from exc
         if not isinstance(parsed, dict):
             raise GemmaServiceError("Gemma JSON must be an object")
         return parsed

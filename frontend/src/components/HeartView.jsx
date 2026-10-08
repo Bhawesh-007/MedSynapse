@@ -44,7 +44,7 @@ export default function HeartView({ initialData, setTab }) {
     setError(null);
     try {
       const res = await predictHeart(formData);
-      setResult(res.data);
+      setResult(res);
     } catch (err) {
       setError(err.message || 'Heart disease prediction failed');
     } finally {

@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from dataclasses import dataclass
 from typing import Any, Mapping
 
@@ -64,22 +65,25 @@ def diabetes_extraction_prompt() -> str:
 
     return """Extract DPF-free diabetes-model inputs from this clinical report.
 
-Return JSON only in this exact shape. You MUST include every one of the seven
-feature keys, even when the report does not contain a value:
-{
-  "features": {
-    "Pregnancies": {"value": null, "unit": "count", "source_text": null, "page": null, "confidence": null, "status": "missing"},
-    "Glucose": {"value": null, "unit": "mg/dL", "source_text": null, "page": null, "confidence": null, "status": "missing"},
-    "BloodPressure": {"value": null, "unit": "mmHg", "source_text": null, "page": null, "confidence": null, "status": "missing"},
-    "SkinThickness": {"value": null, "unit": "mm", "source_text": null, "page": null, "confidence": null, "status": "missing"},
-    "Insulin": {"value": null, "unit": "uIU/mL", "source_text": null, "page": null, "confidence": null, "status": "missing"},
-    "BMI": {"value": null, "unit": "kg/m2", "source_text": null, "page": null, "confidence": null, "status": "missing"},
-    "Age": {"value": null, "unit": "years", "source_text": null, "page": null, "confidence": null, "status": "missing"}
-  }
-}
+Return JSON only. The top-level object must contain a "features" object with
+exactly these seven keys: Pregnancies, Glucose, BloodPressure, SkinThickness,
+Insulin, BMI, and Age. You MUST include every key.
+
+For each feature:
+- When an explicit value is present, return its numeric value, canonical unit,
+  exact source text, one-based page, confidence, and status "extracted".
+- Only when no explicit value is present, return null for value, source_text,
+  page, and confidence, and use status "missing".
+- Never return a numeric value together with status "missing".
+- Scan the entire report before marking any feature missing.
 
 Rules:
 - Extract only values explicitly present in the report. Never infer a value.
+- For Pregnancies, clinical labels such as "Gravida", "gravidity", or
+  "number of pregnancies" are explicit evidence for the total pregnancy
+  count. Do not use parity or number of live births as a substitute.
+- BloodPressure is the diastolic pressure used by the diabetes training
+  dataset. For a systolic/diastolic reading such as 142/90, extract 90.
 - Allowed status values: extracted, missing, ambiguous, unsupported_document.
 - Never omit a feature object. When evidence is absent, use value: null and
   status: "missing" for that feature.
@@ -94,7 +98,6 @@ Rules:
 def diabetes_extraction_json_schema() -> dict[str, Any]:
     """The strict structured-output schema sent to the local Gemma runtime."""
 
-    nullable_number = {"type": ["number", "null"]}
     nullable_string = {"type": ["string", "null"]}
     nullable_page = {"type": ["integer", "null"], "minimum": 1}
     feature_schema = {
@@ -117,7 +120,11 @@ def diabetes_extraction_json_schema() -> dict[str, Any]:
                 "additionalProperties": False,
                 "required": ["value", "unit", "source_text", "page", "confidence", "status"],
                 "properties": {
-                    "value": nullable_number,
+                    # A non-extracted feature cannot safely carry a model
+                    # value.  The old nullable-number schema allowed Gemma to
+                    # emit value=168 with status="missing", which passed
+                    # Ollama's schema but was correctly rejected below.
+                    "value": {"type": "null"},
                     "unit": nullable_string,
                     "source_text": nullable_string,
                     "page": nullable_page,
@@ -250,6 +257,8 @@ def _parse_feature(name: str, item: Mapping[str, Any]) -> ExtractedFeature:
                 f"{name} marked extracted requires value, source_text, page, and confidence"
             )
         value, unit = _normalise_value_and_unit(name, value, unit)
+        if name == "BloodPressure":
+            value = _normalise_diastolic_pressure(value, source_text)
         _validate_value(name, value)
     elif value is not None:
         raise DiabetesFeatureContractError(
@@ -257,6 +266,22 @@ def _parse_feature(name: str, item: Mapping[str, Any]) -> ExtractedFeature:
         )
 
     return ExtractedFeature(value, unit, source_text, page, confidence, status)
+
+
+def _normalise_diastolic_pressure(value: float, source_text: str) -> float:
+    """Use the diastolic component required by the Pima diabetes contract."""
+
+    pair = re.search(r"\b([0-9]{2,3})\s*/\s*([0-9]{2,3})\b", source_text)
+    if pair is None:
+        return value
+
+    systolic = float(pair.group(1))
+    diastolic = float(pair.group(2))
+    if value not in {systolic, diastolic}:
+        raise DiabetesFeatureContractError(
+            "BloodPressure value does not match the explicit systolic/diastolic source text"
+        )
+    return diastolic
 
 
 def _number_or_none(name: str, value: Any) -> float | None:
@@ -276,14 +301,18 @@ def _number_or_none(name: str, value: Any) -> float | None:
 def _normalise_value_and_unit(name: str, value: float, unit: str | None) -> tuple[float, str]:
     cleaned = (unit or CANONICAL_UNITS[name]).replace("μ", "u").replace("µ", "u").strip()
     normalized = cleaned.lower().replace("²", "2")
+    # Clinical reports commonly vary harmless unit typography (for example,
+    # "mm Hg" versus "mmHg"). Compare a compact form while always returning
+    # the canonical training-contract unit.
+    compact = normalized.replace(" ", "")
 
-    if name == "Glucose" and normalized == "mmol/l":
+    if name == "Glucose" and compact == "mmol/l":
         return value * 18.0182, "mg/dL"
-    if name == "Insulin" and normalized in {"uiu/ml", "miu/l"}:
+    if name == "Insulin" and compact in {"uiu/ml", "uu/ml", "miu/l"}:
         return value, "uIU/mL"
-    if name == "BMI" and normalized in {"kg/m2", "kg/m^2"}:
+    if name == "BMI" and compact in {"kg/m2", "kg/m^2"}:
         return value, "kg/m2"
-    if normalized == CANONICAL_UNITS[name].lower():
+    if compact == CANONICAL_UNITS[name].lower().replace(" ", ""):
         return value, CANONICAL_UNITS[name]
 
     raise DiabetesFeatureContractError(

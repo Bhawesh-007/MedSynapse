@@ -65,7 +65,7 @@ export default function XRayView() {
         // Auto predict
         try {
           const res = await predictXRay(sampleFile);
-          setResult(res.data);
+          setResult(res);
           setTimeout(() => {
             resultRef.current?.scrollIntoView({ behavior: 'smooth' });
           }, 150);
@@ -93,7 +93,7 @@ export default function XRayView() {
     setError(null);
     try {
       const res = await predictXRay(file);
-      setResult(res.data);
+      setResult(res);
       setTimeout(() => {
         resultRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 150);

@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Droplets, Sparkles, AlertCircle, FileText, Play, RefreshCw, Activity, ArrowRight } from 'lucide-react';
 import { predictDiabetes } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
+import DiabetesPipelineProgressModal from './DiabetesPipelineProgressModal';
+import useDiabetesPipelineProgress from '../hooks/useDiabetesPipelineProgress';
 
 export default function DiabetesView({ initialData, extractedHighlights, setTab }) {
   const [formData, setFormData] = useState({
@@ -18,6 +20,7 @@ export default function DiabetesView({ initialData, extractedHighlights, setTab 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const pipelineProgress = useDiabetesPipelineProgress();
 
   useEffect(() => {
     if (initialData) {
@@ -37,11 +40,16 @@ export default function DiabetesView({ initialData, extractedHighlights, setTab 
     if (e) e.preventDefault();
     setLoading(true);
     setError(null);
+    setResult(null);
+    pipelineProgress.start();
     try {
       const res = await predictDiabetes(formData);
-      setResult(res.data);
+      setResult(res);
+      pipelineProgress.transition('awaiting_review');
     } catch (err) {
-      setError(err.message || 'Prediction failed');
+      const message = err.message || 'Prediction failed';
+      setError(message);
+      pipelineProgress.fail(message, 'prediction');
     } finally {
       setLoading(false);
     }
@@ -49,6 +57,13 @@ export default function DiabetesView({ initialData, extractedHighlights, setTab 
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <DiabetesPipelineProgressModal
+        isOpen={pipelineProgress.isOpen}
+        stage={pipelineProgress.stage}
+        error={pipelineProgress.error}
+        failedAt={pipelineProgress.failedAt}
+        onClose={pipelineProgress.close}
+      />
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -295,7 +310,8 @@ export default function DiabetesView({ initialData, extractedHighlights, setTab 
         <DiagnosticResultCard
           result={result}
           title="Diabetes Mellitus Risk Evaluation"
-          onReset={() => setResult(null)}
+          onWorkflowStageChange={pipelineProgress.handleWorkflowStageChange}
+          onReset={() => { setResult(null); pipelineProgress.reset(); }}
         />
       )}
     </div>

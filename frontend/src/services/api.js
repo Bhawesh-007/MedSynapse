@@ -126,3 +126,40 @@ export async function generateClinicalNarrative(clinicalReport) {
   }
   return res.json();
 }
+
+export async function getModelRun(modelRunId) {
+  const res = await fetch(`${API_BASE_URL}/api/model-runs/${encodeURIComponent(modelRunId)}`);
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Failed to load model-run review data');
+  }
+  return res.json();
+}
+
+export async function reviewModelRun(modelRunId, decision, reviewedBy, comment = '') {
+  const res = await fetch(
+    `${API_BASE_URL}/api/model-runs/${encodeURIComponent(modelRunId)}/review`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ decision, reviewed_by: reviewedBy, comment }),
+    },
+  );
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Clinician review failed');
+  }
+  return res.json();
+}
+
+export async function generateFinalReport(modelRunId) {
+  const res = await fetch(
+    `${API_BASE_URL}/api/model-runs/${encodeURIComponent(modelRunId)}/final-report`,
+    { method: 'POST' },
+  );
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Final report generation failed');
+  }
+  return res.json();
+}

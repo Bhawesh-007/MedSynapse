@@ -153,7 +153,7 @@ def main() -> int:
     from backend.database import (  # pylint: disable=import-outside-toplevel
         get_connection,
         initialize_database,
-        load_model_features,
+        load_feature_extraction_for_review,
         report_sha256,
     )
 
@@ -190,6 +190,9 @@ def main() -> int:
                     model_features_json = excluded.model_features_json,
                     extraction_status = excluded.extraction_status,
                     clinician_approval_status = excluded.clinician_approval_status,
+                    clinician_reviewed_by = NULL,
+                    clinician_review_note = NULL,
+                    clinician_reviewed_at = NULL,
                     updated_at = CURRENT_TIMESTAMP
                 """,
                 (
@@ -203,10 +206,13 @@ def main() -> int:
 
     verified = []
     for sample in samples:
-        stored = load_model_features(sample["id"], "diabetes")
+        review_record = load_feature_extraction_for_review(sample["id"])
+        stored = review_record["model_features"]
         expected = legacy_model_features(sample["features"])
         if stored != expected:
             raise RuntimeError(f"Database round-trip mismatch for {sample['id']}")
+        if review_record["clinician_approval_status"] != "pending":
+            raise RuntimeError(f"Expected pending review status for {sample['id']}")
         verified.append(
             {
                 "id": sample["id"],

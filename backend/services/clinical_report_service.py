@@ -2,10 +2,6 @@
 
 from __future__ import annotations
 
-import json
-import os
-import urllib.error
-import urllib.request
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -15,6 +11,7 @@ import numpy as np
 
 from backend.services.explainability_service import ExplainabilityService
 from backend.services.breast_feature_contract import BREAST_FEATURE_ORDER
+from backend.services.groq_report_service import GroqReportService
 
 
 class ClinicalReportService:
@@ -25,12 +22,17 @@ class ClinicalReportService:
         self.project_root = Path(project_root)
         self.explanations_dir = self.project_root / "data" / "explanations"
         self.background_dir = self.project_root / "models" / "explainability"
+        self.final_report_service = GroqReportService()
 
     def build_report(self, *, disease_key: str, prediction: dict[str, Any], inputs: dict[str, Any],
                      feature_source: str = "direct_submission", feature_extraction_id: str | None = None,
                      image_bytes: bytes | None = None) -> dict[str, Any]:
         report_id = str(uuid4())
         explanation = self._explain(disease_key, inputs, prediction, image_bytes, report_id)
+        explanation["plain_language"] = {
+            "generator": "deterministic_template_v1",
+            "sentences": self._explanation_sentences(explanation),
+        }
         return {
             "report_version": "1.0",
             "report_id": report_id,
@@ -58,7 +60,7 @@ class ClinicalReportService:
                 "threshold_result": "positive" if prediction.get("risk_probability", 0) >= 0.5 else "negative",
                 "model_decision": prediction.get("prediction", prediction.get("diagnosis")),
             },
-            "clinical_inputs": self._safe_inputs(inputs),
+            "clinical_inputs": self._safe_inputs(disease_key, inputs),
             "model_output": prediction,
             "explainability": explanation,
             "safety": {
@@ -114,8 +116,56 @@ class ClinicalReportService:
         return {"status": "not_applicable", "method": None, "limitations": ["No explanation adapter is configured for this model."]}
 
     @staticmethod
-    def _safe_inputs(inputs: dict[str, Any]) -> list[dict[str, Any]]:
-        return [{"name": name, "value": value, "source": "validated model input"} for name, value in inputs.items()]
+    def _safe_inputs(disease_key: str, inputs: dict[str, Any]) -> list[dict[str, Any]]:
+        """Attach only explicit, model-contract metadata to final-report inputs."""
+        if disease_key != "diabetes":
+            return [
+                {"name": name, "value": value, "source": "validated model input"}
+                for name, value in inputs.items()
+            ]
+
+        aliases = {
+            "Pregnancies": ("pregnancies", "Pregnancies"),
+            "Glucose": ("glucose", "Glucose"),
+            "BloodPressure": ("blood_pressure", "BloodPressure"),
+            "SkinThickness": ("skin_thickness", "SkinThickness"),
+            "Insulin": ("insulin", "Insulin"),
+            "BMI": ("bmi", "BMI"),
+            "DiabetesPedigreeFunction": ("dpf", "DiabetesPedigreeFunction"),
+            "Age": ("age", "Age"),
+            "BMI_Cat": ("bmi_cat", "BMI_Cat"),
+        }
+        metadata = {
+            "Pregnancies": ("Pregnancies", "count"),
+            "Glucose": ("Fasting glucose", "mg/dL"),
+            "BloodPressure": ("Diastolic blood pressure", "mm Hg"),
+            "SkinThickness": ("Triceps skin thickness", "mm"),
+            "Insulin": ("Serum insulin", "μU/mL"),
+            "BMI": ("Body mass index", "kg/m²"),
+            "DiabetesPedigreeFunction": ("Diabetes pedigree function", None),
+            "Age": ("Age", "years"),
+            "BMI_Cat": ("Derived BMI category", None),
+        }
+
+        def lookup(names):
+            return next((inputs[name] for name in names if name in inputs), None)
+
+        values = {canonical: lookup(names) for canonical, names in aliases.items()}
+        if values["BMI_Cat"] is None and values["BMI"] is not None:
+            bmi = float(values["BMI"])
+            values["BMI_Cat"] = 0 if bmi < 18.5 else 1 if bmi < 25 else 2 if bmi < 30 else 3
+
+        return [
+            {
+                "name": canonical,
+                "display_name": metadata[canonical][0],
+                "value": values[canonical],
+                "unit": metadata[canonical][1],
+                "source": "derived model input" if canonical == "BMI_Cat" else "validated model input",
+            }
+            for canonical in aliases
+            if values[canonical] is not None
+        ]
 
     @staticmethod
     def _validation_status(inputs: dict[str, Any]) -> str:
@@ -126,25 +176,42 @@ class ClinicalReportService:
         return {"diabetes": "diabetes_model.pkl", "heart": "heart_model.pkl", "pneumonia": "xrays_pneumonia.keras", "breast": "breast_cancer_model.pkl", "eye": "eye_disease.keras"}.get(disease_key, disease_key)
 
     @staticmethod
-    def generate_narrative(report: dict[str, Any]) -> dict[str, Any]:
-        """Use an OpenAI-compatible endpoint only when explicitly configured."""
-        api_url, api_key, model = (os.getenv("LLM_API_URL"), os.getenv("LLM_API_KEY"), os.getenv("LLM_MODEL"))
-        if not all((api_url, api_key, model)):
-            raise RuntimeError("LLM is not configured. Set LLM_API_URL, LLM_API_KEY, and LLM_MODEL.")
-        system_prompt = (
-            "You write a concise clinician-reviewable screening summary. Use only facts in the supplied JSON. "
-            "Never call this a diagnosis, never infer missing information, never claim SHAP/Grad-CAM proves causality, "
-            "and include that clinician review is required. Explicitly summarize the listed top SHAP contributors or "
-            "Grad-CAM target evidence when available, using their exact values; if explainability is unavailable, say so."
-        )
-        body = json.dumps({"model": model, "temperature": 0.2, "messages": [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": json.dumps(report, ensure_ascii=False)},
-        ]}).encode("utf-8")
-        request = urllib.request.Request(api_url, data=body, headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"}, method="POST")
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                payload = json.loads(response.read().decode("utf-8"))
-            return {"report_id": report.get("report_id"), "narrative": payload["choices"][0]["message"]["content"], "provider_model": model}
-        except (urllib.error.URLError, KeyError, IndexError, json.JSONDecodeError) as exc:
-            raise RuntimeError(f"LLM narrative generation failed: {exc}") from exc
+    def _explanation_sentences(explanation: dict[str, Any]) -> list[str]:
+        """Translate explanation evidence without an LLM or clinical inference."""
+        if explanation.get("status") != "available":
+            reason = explanation.get("reason", "No explanation adapter produced evidence.")
+            return [f"Model explanation is unavailable: {reason}"]
+
+        method = explanation.get("method") or "Model explanation"
+        if "SHAP" in method:
+            sentences = []
+            for item in explanation.get("all_contributions", [])[:5]:
+                shap_value = float(item.get("shap_value", 0.0))
+                direction = "increased" if shap_value >= 0 else "reduced"
+                sentences.append(
+                    f"{item.get('feature')} at {item.get('patient_value')} {direction} "
+                    f"the model's positive-class score (SHAP {shap_value:+.6f})."
+                )
+            sentences.append(
+                "SHAP describes this model's behavior for the submitted input and does not establish medical causality."
+            )
+            return sentences
+
+        if method == "Grad-CAM":
+            return [
+                f"Grad-CAM highlighted image regions that influenced the model output for "
+                f"{explanation.get('target_class', 'the selected class')}.",
+                "The highlighted regions are model-attention evidence, not confirmed anatomical findings.",
+            ]
+        return [
+            f"{method} evidence is available for clinician review.",
+            "This explanation describes model behavior and does not establish medical causality.",
+        ]
+
+    def generate_final_report(self, approved_package: dict[str, Any]) -> dict[str, Any]:
+        """Call Groq once after an explicit clinician approval."""
+        return self.final_report_service.generate_final_report(approved_package)
+
+    def generate_narrative(self, report: dict[str, Any]) -> dict[str, Any]:
+        """Backward-compatible wrapper around the approved-package final report call."""
+        return self.generate_final_report(report)

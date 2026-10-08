@@ -24,7 +24,7 @@ export default function BreastCancerView({ setTab, initialData }) {
     setLoading(true); setError(null);
     try {
       const response = await predictBreastCancer(Object.fromEntries(FEATURES.map(name => [name, Number(features[name])])));
-      setResult(response.data);
+      setResult(response);
     } catch (err) { setError(err.message || 'Breast-cancer prediction failed'); }
     finally { setLoading(false); }
   };

@@ -239,7 +239,8 @@ class ExplainabilityService:
             last_conv = find_last_conv(model)
             if last_conv is None:
                 raise ValueError("The CNN has no accessible Conv2D layer for Grad-CAM.")
-            grad_model = tf.keras.Model(model.inputs, [last_conv.output, model.output])
+            model_output = model.outputs[0] if isinstance(model.outputs, (list, tuple)) else model.output
+            grad_model = tf.keras.Model(model.inputs, [last_conv.output, model_output])
             with tf.GradientTape() as tape:
                 conv_output, predictions = grad_model(image_tensor, training=False)
                 if predictions.shape[-1] == 1:

@@ -288,6 +288,226 @@ body {
   animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
+/* Diabetes-only pipeline progress dialog. It follows real API milestones and
+   deliberately does not simulate backend progress with timers. */
+.pipeline-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(17, 24, 39, 0.44);
+  backdrop-filter: blur(5px);
+  animation: pipelineBackdropIn 160ms ease-out;
+}
+
+.pipeline-modal {
+  position: relative;
+  width: min(680px, 100%);
+  max-height: min(820px, calc(100vh - 48px));
+  overflow-y: auto;
+  padding: 26px;
+  border: 1px solid #c7decf;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 28px 70px rgba(17, 49, 28, 0.22);
+  animation: pipelineModalIn 190ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.pipeline-modal-close {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid #d7e7db;
+  border-radius: 50%;
+  background: #ffffff;
+  color: #1b1b1b;
+  cursor: pointer;
+}
+
+.pipeline-modal-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 14px;
+  padding-right: 34px;
+}
+
+.pipeline-modal-symbol {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  background: #e8f5eb;
+  color: #25854a;
+}
+
+.pipeline-modal-symbol.is-error {
+  background: #fff0f1;
+  color: #b42318;
+}
+
+.pipeline-modal-symbol.is-complete {
+  background: #25854a;
+  color: #ffffff;
+}
+
+.pipeline-modal-eyebrow {
+  margin: 0 0 3px;
+  color: #25854a;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.pipeline-modal-header h2 {
+  margin: 0;
+  color: #171717;
+  font-size: 1.35rem;
+  line-height: 1.25;
+}
+
+.pipeline-modal-header > div > p:last-child {
+  margin: 7px 0 0;
+  color: #4b5563;
+  font-size: 0.86rem;
+}
+
+.pipeline-progress-track {
+  height: 7px;
+  margin: 20px 0;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5eee7;
+}
+
+.pipeline-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #25854a;
+  transition: width 280ms ease;
+}
+
+.pipeline-step-list {
+  display: grid;
+  gap: 9px;
+}
+
+.pipeline-step {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 10px;
+  padding: 11px;
+  border: 1px solid transparent;
+  border-radius: 11px;
+}
+
+.pipeline-step-icon {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid #d4dfd6;
+  border-radius: 50%;
+  color: #6b7280;
+}
+
+.pipeline-step h3 {
+  margin: 0;
+  color: #1f2937;
+  font-size: 0.88rem;
+}
+
+.pipeline-step p {
+  margin: 3px 0 0;
+  color: #6b7280;
+  font-size: 0.75rem;
+  line-height: 1.4;
+}
+
+.pipeline-step.is-complete .pipeline-step-icon,
+.pipeline-step.is-active .pipeline-step-icon,
+.pipeline-step.is-current .pipeline-step-icon {
+  border-color: #25854a;
+  background: #25854a;
+  color: #ffffff;
+}
+
+.pipeline-step.is-active,
+.pipeline-step.is-current {
+  border-color: #b8d8c0;
+  background: #f3faf5;
+}
+
+.pipeline-step.is-error,
+.pipeline-step.is-rejected {
+  border-color: #fecaca;
+  background: #fff6f6;
+}
+
+.pipeline-step.is-error .pipeline-step-icon,
+.pipeline-step.is-rejected .pipeline-step-icon {
+  border-color: #b42318;
+  background: #b42318;
+  color: #ffffff;
+}
+
+.pipeline-step.is-pending,
+.pipeline-step.is-blocked {
+  opacity: 0.58;
+}
+
+.pipeline-modal-error {
+  margin-top: 14px;
+  padding: 10px 12px;
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+  background: #fff6f6;
+  color: #991b1b;
+  font-size: 0.82rem;
+}
+
+.pipeline-modal-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+  padding-top: 15px;
+  border-top: 1px solid #e2ebe4;
+}
+
+.pipeline-modal-footer > span {
+  max-width: 390px;
+  color: #6b7280;
+  font-size: 0.74rem;
+}
+
+@keyframes pipelineBackdropIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes pipelineModalIn {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@media (max-width: 640px) {
+  .pipeline-modal-backdrop { padding: 12px; }
+  .pipeline-modal { padding: 20px 16px; max-height: calc(100vh - 24px); }
+  .pipeline-modal-header { grid-template-columns: 1fr; }
+  .pipeline-modal-footer { align-items: stretch; flex-direction: column; }
+  .pipeline-modal-footer .btn-primary { width: 100%; }
+}
+
 /* The views contain some legacy inline dark-theme values. Keep the visual
    language consistent while preserving semantic risk and success treatments. */
 main .glass-panel {

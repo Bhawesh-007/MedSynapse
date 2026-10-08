@@ -206,7 +206,7 @@ def values_match(actual, expected):
 def exercise(audit, fixtures, breast):
     from fastapi.testclient import TestClient
     from backend import main
-    from backend.database import load_model_features, save_feature_extraction
+    from backend.database import load_model_features, save_feature_extraction, set_clinician_approval
     from backend.services.ocr_service import MedicalOCREngine
 
     # Keep generated explanation files inside this run, not production data/.
@@ -277,11 +277,23 @@ def exercise(audit, fixtures, breast):
             audit.check(disease, "extraction persisted", bool(row) and row[0] == disease,
                         f"Stored row disease/status/approval/digest: {row}")
             if state == "ready_for_inference":
-                saved = audit.attempt(disease, "load stored features", lambda: load_model_features(extraction_id, disease))
+                try:
+                    load_model_features(extraction_id, disease)
+                    pending_blocked = False
+                except ValueError as exc:
+                    pending_blocked = "requires clinician approval" in str(exc)
+                audit.check(disease, "pending approval blocks store read", pending_blocked,
+                            "Pending evidence is rejected before model feature loading")
+                approval = client.post(f"/api/feature-extractions/{extraction_id}/review", json={
+                    "status": "approved", "reviewed_by": "Synthetic Pipeline Auditor",
+                    "note": "Automated synthetic pipeline test",
+                })
+                audit.check(disease, "clinician approval transition", approval.status_code == 200 and
+                            approval.json().get("data", {}).get("clinician_approval_status") == "approved",
+                            f"HTTP {approval.status_code}; explicit approval recorded")
+                saved = audit.attempt(disease, "load approved stored features", lambda: load_model_features(extraction_id, disease))
                 if saved is not None:
-                    audit.check(disease, "storage round trip", saved == extraction["model_features"], "Stored features match extracted features")
-                    audit.check(disease, "pending approval blocks store read", saved is None,
-                                "load_model_features returned features while clinician_approval_status=pending")
+                    audit.check(disease, "storage round trip", saved == extraction["model_features"], "Approved stored features match extracted features")
             if disease in {"diabetes", "breast"} and extraction_id:
                 endpoint = "diabetes" if disease == "diabetes" else "breast-cancer"
                 audit.prediction(disease, "uploaded report store prediction", audit.request(client, disease, "uploaded report store prediction",
@@ -308,8 +320,10 @@ def exercise(audit, fixtures, breast):
         seeded = dict(Pregnancies=2, Glucose=168, BloodPressure=90, SkinThickness=28, Insulin=42.5, BMI=33.4, Age=42, BMI_Cat=3)
         seeded_id = save_feature_extraction(disease_type="diabetes", source_filename="isolated-contract-fixture",
                     report_text=fixtures["diabetes"]["text"], features={}, model_features=seeded, extraction_status="ready_for_inference")
+        set_clinician_approval(seeded_id, status="approved", reviewed_by="Synthetic Pipeline Auditor",
+                               note="Isolated artifact contract test")
         status, body = audit.request(client, "diabetes", "isolated eight-feature artifact contract", f"/api/predict/diabetes/from-feature-store/{seeded_id}")
-        audit.check("diabetes", "legacy mismatch refused safely", status == 409 and "8-feature" in str(body),
+        audit.check("diabetes", "legacy mismatch refused safely", status == 409 and "requires 9 features" in str(body),
                     f"HTTP {status}: {body.get('detail', body)}")
 
         for disease, endpoint in [("pneumonia", "xray"), ("eye", "eye")]:
@@ -406,10 +420,10 @@ def retry_gemma(audit, timeout_seconds):
             extraction_id = save_feature_extraction(disease_type=disease, source_filename="extended-timeout-diagnostic",
                        report_text=report_text, features=result["features"], model_features=result["model_features"],
                        extraction_status=result["status"])
+            set_clinician_approval(extraction_id, status="approved", reviewed_by="Synthetic Pipeline Auditor",
+                                   note="Extended-timeout synthetic pipeline test")
             saved = load_model_features(extraction_id, disease)
             audit.check(disease, "extended timeout store round trip", saved == result["model_features"], "Retry features persisted and loaded exactly")
-            audit.check(disease, "extended timeout pending approval blocked", False,
-                        "Retry evidence was loaded while its actual SQLite approval status was pending")
             if disease == "diabetes":
                 with TestClient(main.app, raise_server_exceptions=False) as client:
                     audit.prediction(disease, "extended timeout store prediction", audit.request(client, disease,

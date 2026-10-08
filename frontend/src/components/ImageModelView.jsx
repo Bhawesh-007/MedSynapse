@@ -47,7 +47,7 @@ export default function ImageModelView({ kind, onPredict }) {
     setError(null);
     try {
       const response = await onPredict(file);
-      setResult(response.data);
+      setResult(response);
     } catch (err) {
       setError(err.message || `${copy.title} failed`);
     } finally {

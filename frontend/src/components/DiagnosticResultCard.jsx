@@ -13,39 +13,96 @@ import {
   Stethoscope
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { generateFinalReport, reviewModelRun } from '../services/api';
 
 export default function DiagnosticResultCard({ 
-  result, 
+  result: resultProp,
   onReset, 
   title = 'Diagnostic Risk Assessment',
-  inputData = null
+  onWorkflowStageChange,
 }) {
-  if (!result) return null;
+  const assessmentResponse = resultProp?.success && resultProp?.data ? resultProp : null;
+  const result = assessmentResponse?.data || resultProp;
+  const clinicalReport = assessmentResponse?.clinical_report || null;
+  const modelRunId = assessmentResponse?.model_run_id || clinicalReport?.model_run_id || null;
 
   const [reportId] = useState(() => `MS-${Math.floor(100000 + Math.random() * 900000)}`);
   const [reportDate] = useState(() => new Date().toLocaleString('en-US', {
     dateStyle: 'medium',
     timeStyle: 'short'
   }));
+  const [reviewedBy, setReviewedBy] = useState('');
+  const [reviewComment, setReviewComment] = useState('');
+  const [workflowStatus, setWorkflowStatus] = useState(
+    assessmentResponse?.workflow_status || 'awaiting_clinician_review'
+  );
+  const [reviewLoading, setReviewLoading] = useState(false);
+  const [reviewError, setReviewError] = useState(null);
+  const [finalReport, setFinalReport] = useState(null);
 
-  const isHealthy = result.prediction === 0 || 
-                    result.is_positive === false || 
-                    result.has_disease === false;
+  const isHealthy = result && (result.prediction === 0 ||
+                    result.is_positive === false ||
+                    result.has_disease === false);
 
-  const riskPercent = result.risk_percentage || 
-                      result.confidence_percentage || 
-                      (result.pneumonia_probability ? (result.pneumonia_probability * 100).toFixed(1) : 0);
+  const riskPercent = result?.risk_percentage ||
+                      result?.confidence_percentage ||
+                      (result?.pneumonia_probability ? (result.pneumonia_probability * 100).toFixed(1) : 0);
 
   // Trigger celebration confetti if healthy result
   React.useEffect(() => {
-    if (isHealthy) {
+    if (result && isHealthy) {
       confetti({
         particleCount: 60,
         spread: 70,
         origin: { y: 0.6 }
       });
     }
-  }, [isHealthy]);
+  }, [result, isHealthy]);
+
+  if (!result) return null;
+
+  const explanationSentences = clinicalReport?.explainability?.plain_language?.sentences || [];
+
+  const handleClinicianReview = async (decision) => {
+    if (!modelRunId) return;
+    if (!reviewedBy.trim()) {
+      setReviewError('Enter the clinician name or identifier before reviewing.');
+      return;
+    }
+    setReviewLoading(true);
+    setReviewError(null);
+    onWorkflowStageChange?.('review_saving');
+    try {
+      const response = await reviewModelRun(modelRunId, decision, reviewedBy.trim(), reviewComment);
+      setWorkflowStatus(response.data.workflow_status);
+      setFinalReport(null);
+      onWorkflowStageChange?.(decision === 'approved' ? 'approved' : 'rejected');
+    } catch (error) {
+      const message = error.message || 'Clinician review failed';
+      setReviewError(message);
+      onWorkflowStageChange?.('error', { message, failedAt: 'review' });
+    } finally {
+      setReviewLoading(false);
+    }
+  };
+
+  const handleFinalReport = async () => {
+    setReviewLoading(true);
+    setReviewError(null);
+    onWorkflowStageChange?.('groq_generating');
+    try {
+      const response = await generateFinalReport(modelRunId);
+      setFinalReport(response.data);
+      setWorkflowStatus('final_report_generated');
+      onWorkflowStageChange?.('complete');
+    } catch (error) {
+      const message = error.message || 'Final report generation failed';
+      setReviewError(message);
+      onWorkflowStageChange?.('error', { message, failedAt: 'groq' });
+    } finally {
+      setReviewLoading(false);
+    }
+  };
 
   const handleDownloadPDF = () => {
     const originalTitle = document.title;
@@ -99,13 +156,18 @@ export default function DiagnosticResultCard({
       <div className="no-print" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '1rem 0', flexWrap: 'wrap', gap: '10px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span className="badge badge-cyan">A4 Standardized Report</span>
-          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Ready for clinical export & print</span>
+          <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
+            {workflowStatus === 'final_report_generated'
+              ? 'Clinician-approved final report ready for export'
+              : 'Draft screening result — clinician approval required'}
+          </span>
         </div>
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <button 
             onClick={handleDownloadPDF} 
             className="btn-primary" 
+            disabled={Boolean(modelRunId) && workflowStatus !== 'final_report_generated'}
             style={{ padding: '8px 16px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <FileDown size={16} /> Download A4 PDF Report
@@ -113,6 +175,7 @@ export default function DiagnosticResultCard({
           <button 
             onClick={handleDownloadPDF} 
             className="btn-secondary" 
+            disabled={Boolean(modelRunId) && workflowStatus !== 'final_report_generated'}
             style={{ padding: '8px 14px', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '6px' }}
           >
             <Printer size={15} /> Print Document
@@ -250,6 +313,67 @@ export default function DiagnosticResultCard({
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {clinicalReport && (
+        <div className="break-inside-avoid" style={{ margin: '1.25rem 0', padding: '1rem', background: '#ffffff', border: '1px solid #cfe3d4', borderRadius: '10px' }}>
+          <h4 style={{ color: '#111111', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Info size={16} color="#25854a" /> Deterministic Model Explanation
+          </h4>
+          <ul style={{ margin: 0, paddingLeft: '1.2rem', color: '#1f2937', fontSize: '0.85rem', lineHeight: 1.6 }}>
+            {explanationSentences.map((sentence, index) => <li key={index}>{sentence}</li>)}
+          </ul>
+          <p style={{ margin: '8px 0 0', color: '#4b5563', fontSize: '0.75rem' }}>
+            Generated from stored SHAP or Grad-CAM evidence without an LLM.
+          </p>
+        </div>
+      )}
+
+      {modelRunId && (
+        <div className="no-print" style={{ margin: '1.25rem 0', padding: '1rem', background: '#f5faf6', border: '1px solid #b9d8c1', borderRadius: '10px' }}>
+          <h4 style={{ color: '#111111', marginBottom: '4px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Stethoscope size={16} color="#25854a" /> Clinician Decision
+          </h4>
+          <p style={{ color: '#4b5563', fontSize: '0.8rem', margin: '0 0 10px' }}>
+            Review the model output and explanation. Approval permits the single final LLM report call; rejection stops it.
+          </p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px, 0.7fr) minmax(240px, 1.3fr)', gap: '10px' }}>
+            <input className="form-input" value={reviewedBy} onChange={(event) => setReviewedBy(event.target.value)} placeholder="Clinician name or ID" />
+            <input className="form-input" value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} placeholder="Clinical review comment" />
+          </div>
+          <div style={{ display: 'flex', gap: '10px', marginTop: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className="btn-primary" disabled={reviewLoading || workflowStatus === 'final_report_generated'} onClick={() => handleClinicianReview('approved')}>
+              <CheckCircle size={16} /> Approve Decision
+            </button>
+            <button className="btn-secondary" disabled={reviewLoading || workflowStatus === 'final_report_generated'} onClick={() => handleClinicianReview('rejected')}>
+              <XCircle size={16} /> Reject Decision
+            </button>
+            {workflowStatus === 'clinician_approved' && (
+              <button className="btn-primary" disabled={reviewLoading} onClick={handleFinalReport}>
+                <FileCheck size={16} /> Generate Final LLM Report
+              </button>
+            )}
+            <span className={`badge ${workflowStatus === 'clinician_approved' || workflowStatus === 'final_report_generated' ? 'badge-success' : workflowStatus === 'clinician_rejected' ? 'badge-danger' : 'badge-warning'}`}>
+              {workflowStatus.replaceAll('_', ' ')}
+            </span>
+          </div>
+          {reviewError && <p style={{ color: '#b42318', margin: '10px 0 0', fontSize: '0.8rem' }}>{reviewError}</p>}
+        </div>
+      )}
+
+      {finalReport?.report && (
+        <div className="break-inside-avoid" style={{ margin: '1.25rem 0', padding: '1rem', background: '#ffffff', border: '1px solid #b9d8c1', borderRadius: '10px', color: '#111111' }}>
+          <h3 style={{ marginTop: 0 }}>{finalReport.report.title}</h3>
+          <p>{finalReport.report.screening_summary}</p>
+          <p>{finalReport.report.model_findings}</p>
+          <p>{finalReport.report.explainability_summary}</p>
+          <p><strong>Clinician review:</strong> {finalReport.report.clinician_review}</p>
+          <h4>Recommendations</h4>
+          <ul>{finalReport.report.recommendations.map((item, index) => <li key={index}>{item}</li>)}</ul>
+          <h4>Limitations</h4>
+          <ul>{finalReport.report.limitations.map((item, index) => <li key={index}>{item}</li>)}</ul>
+          <p style={{ fontSize: '0.78rem', color: '#4b5563' }}>{finalReport.report.disclaimer}</p>
         </div>
       )}
 

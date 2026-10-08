@@ -34,6 +34,7 @@ flowchart LR
 | Tabular ML | scikit-learn, NumPy |
 | Image ML | TensorFlow / Keras, Pillow |
 | Local feature store | SQLite |
+| Final report LLM | Groq Chat Completions with JSON Schema output |
 
 ## Active endpoints
 
@@ -46,6 +47,24 @@ flowchart LR
 | `POST /api/predict/diabetes/from-feature-store/{id}` | Runs diabetes prediction from stored validated features |
 | `POST /api/predict/heart` | Runs coronary heart disease risk prediction |
 | `POST /api/predict/xray` | Runs pneumonia screening on a chest X-ray |
+| `GET /api/model-runs/{id}` | Returns the persisted prediction, explanation, review, and final report |
+| `POST /api/model-runs/{id}/review` | Records clinician approval or rejection |
+| `POST /api/model-runs/{id}/final-report` | Calls Groq after clinician approval and persists the validated report |
+
+## Configure the Groq final-report provider
+
+Copy `.env.example` to `.env` and add the Groq API key locally:
+
+```dotenv
+LLM_API_URL=https://api.groq.com/openai/v1/chat/completions
+LLM_API_KEY=your_groq_api_key
+LLM_MODEL=openai/gpt-oss-20b
+LLM_TIMEOUT_SECONDS=30
+```
+
+The repository ignores `.env`; never commit or send the API key. The backend
+loads this file during startup. `GET /api/health` reports the provider, model,
+endpoint, and configuration state without exposing the key.
 
 ## Run locally
 

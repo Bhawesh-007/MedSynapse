@@ -2,25 +2,35 @@ import os
 import sys
 import io
 import traceback
+from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import Optional, Dict, Any
+from pydantic import BaseModel, Field
+from dotenv import load_dotenv
+from typing import Optional, Dict, Any, Literal
 
 # Ensure project root in sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if BASE_DIR not in sys.path:
     sys.path.insert(0, BASE_DIR)
+load_dotenv(Path(BASE_DIR) / ".env")
 
 try:
     from backend.database import (
+        build_approved_report_package,
         initialize_database,
+        load_feature_extraction_for_review,
         load_image_feature_extraction,
+        load_model_run,
         load_model_features,
+        review_model_run,
+        save_final_report,
         save_feature_extraction,
         save_image_feature_extraction,
+        save_model_run,
+        set_clinician_approval,
     )
     from backend.services.ocr_service import MedicalOCREngine
     from backend.services.model_service import ModelService
@@ -31,11 +41,18 @@ try:
     from backend.services.clinical_report_service import ClinicalReportService
 except ImportError:
     from database import (
+        build_approved_report_package,
         initialize_database,
+        load_feature_extraction_for_review,
         load_image_feature_extraction,
+        load_model_run,
         load_model_features,
+        review_model_run,
+        save_final_report,
         save_feature_extraction,
         save_image_feature_extraction,
+        save_model_run,
+        set_clinician_approval,
     )
     from services.ocr_service import MedicalOCREngine
     from services.model_service import ModelService
@@ -105,6 +122,55 @@ class ReportNarrativeInput(BaseModel):
     report: Dict[str, Any]
 
 
+class ClinicianReviewInput(BaseModel):
+    status: Literal["approved", "rejected"]
+    reviewed_by: str = Field(min_length=1, max_length=120)
+    note: Optional[str] = Field(default=None, max_length=1000)
+
+
+class ModelRunReviewInput(BaseModel):
+    decision: Literal["approved", "rejected"]
+    reviewed_by: str = Field(min_length=1, max_length=120)
+    comment: Optional[str] = Field(default=None, max_length=2000)
+
+
+def create_model_run_response(
+    *,
+    disease_key: str,
+    result: Dict[str, Any],
+    inputs: Dict[str, Any],
+    feature_source: str = "direct_submission",
+    feature_extraction_id: Optional[str] = None,
+    image_bytes: Optional[bytes] = None,
+    extra: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """Apply the common explanation, review, and final-report workflow."""
+    report = clinical_report_service.build_report(
+        disease_key=disease_key,
+        prediction=result,
+        inputs=inputs,
+        feature_source=feature_source,
+        feature_extraction_id=feature_extraction_id,
+        image_bytes=image_bytes,
+    )
+    run = save_model_run(
+        disease_type=disease_key,
+        prediction=result,
+        clinical_report=report,
+        feature_extraction_id=feature_extraction_id,
+    )
+    response = {
+        "success": True,
+        "data": result,
+        "clinical_report": run["clinical_report"],
+        "model_run_id": run["model_run_id"],
+        "workflow_status": run["workflow_status"],
+    }
+    if extra:
+        response.update(extra)
+    return response
+
+
 @app.get("/api/health")
 def health_check():
     models_status = {
@@ -118,7 +184,8 @@ def health_check():
         "status": "online",
         "system": "MedSynapse AI v2.0",
         "ocr_engine": "Tesseract OCR + PyMuPDF Active",
-        "models": models_status
+        "models": models_status,
+        "final_report_provider": clinical_report_service.final_report_service.public_configuration(),
     }
 
 
@@ -334,10 +401,9 @@ def predict_diabetes_risk(payload: DiabetesInput):
     try:
         inputs = payload.model_dump()
         result = model_service.predict_diabetes(inputs)
-        report = clinical_report_service.build_report(
-            disease_key="diabetes", prediction=result, inputs=inputs
+        return create_model_run_response(
+            disease_key="diabetes", result=result, inputs=inputs
         )
-        return {"success": True, "data": result, "clinical_report": report}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Diabetes prediction failed: {str(e)}")
@@ -349,16 +415,16 @@ def predict_diabetes_from_feature_store(feature_extraction_id: str):
     try:
         model_features = load_model_features(feature_extraction_id, "diabetes")
         result = model_service.predict_diabetes_from_feature_store(model_features)
-        return {
-            "success": True,
-            "data": result,
-            "clinical_report": clinical_report_service.build_report(
-                disease_key="diabetes", prediction=result, inputs=model_features,
-                feature_source="local_database", feature_extraction_id=feature_extraction_id,
-            ),
-            "feature_extraction_id": feature_extraction_id,
-            "feature_source": "local_database",
-        }
+        return create_model_run_response(
+            disease_key="diabetes",
+            result=result,
+            inputs=model_features,
+            feature_source="local_database", feature_extraction_id=feature_extraction_id,
+            extra={
+                "feature_extraction_id": feature_extraction_id,
+                "feature_source": "local_database",
+            },
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -368,15 +434,47 @@ def predict_diabetes_from_feature_store(feature_extraction_id: str):
         raise HTTPException(status_code=500, detail=f"Diabetes prediction failed: {str(exc)}") from exc
 
 
+@app.get("/api/feature-extractions/{feature_extraction_id}/review")
+def get_feature_extraction_review(feature_extraction_id: str):
+    """Return structured evidence for clinician review; raw report text is not stored."""
+    try:
+        return {
+            "success": True,
+            "data": load_feature_extraction_for_review(feature_extraction_id),
+        }
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/feature-extractions/{feature_extraction_id}/review")
+def review_feature_extraction(feature_extraction_id: str, payload: ClinicianReviewInput):
+    """Approve or reject structured evidence before database-backed inference."""
+    try:
+        return {
+            "success": True,
+            "data": set_clinician_approval(
+                feature_extraction_id,
+                status=payload.status,
+                reviewed_by=payload.reviewed_by,
+                note=payload.note,
+            ),
+        }
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
 @app.post("/api/predict/heart")
 def predict_heart_risk(payload: HeartInput):
     try:
         inputs = payload.model_dump()
         result = model_service.predict_heart(inputs)
-        report = clinical_report_service.build_report(
-            disease_key="heart", prediction=result, inputs=inputs
+        return create_model_run_response(
+            disease_key="heart", result=result, inputs=inputs
         )
-        return {"success": True, "data": result, "clinical_report": report}
     except Exception as e:
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Heart disease prediction failed: {str(e)}")
@@ -395,20 +493,18 @@ async def predict_xray(file: UploadFile = File(...)):
             image_bytes=contents,
             preprocessing=result["image_features"],
         )
-        return {
-            "success": True,
-            "data": result,
-            "clinical_report": clinical_report_service.build_report(
-                disease_key="pneumonia",
-                prediction=result,
-                inputs={"source_filename": file.filename or ""},
-                feature_source="uploaded_image_persisted_local_database",
-                feature_extraction_id=feature_extraction_id,
-                image_bytes=contents,
-            ),
-            "feature_extraction_id": feature_extraction_id,
-            "feature_source": "uploaded_image_persisted_local_database",
-        }
+        return create_model_run_response(
+            disease_key="pneumonia",
+            result=result,
+            inputs={"source_filename": file.filename or ""},
+            feature_source="uploaded_image_persisted_local_database",
+            feature_extraction_id=feature_extraction_id,
+            image_bytes=contents,
+            extra={
+                "feature_extraction_id": feature_extraction_id,
+                "feature_source": "uploaded_image_persisted_local_database",
+            },
+        )
     except HTTPException:
         raise
     except FileNotFoundError as e:
@@ -426,21 +522,19 @@ def predict_xray_from_feature_store(feature_extraction_id: str):
             feature_extraction_id, "pneumonia"
         )
         result = model_service.predict_xray(image_bytes)
-        return {
-            "success": True,
-            "data": result,
-            "clinical_report": clinical_report_service.build_report(
-                disease_key="pneumonia",
-                prediction=result,
-                inputs={"source": "local image feature store"},
-                feature_source="local_database",
-                feature_extraction_id=feature_extraction_id,
-                image_bytes=image_bytes,
-            ),
-            "feature_extraction_id": feature_extraction_id,
-            "feature_source": "local_database",
-            "stored_preprocessing": stored_preprocessing,
-        }
+        return create_model_run_response(
+            disease_key="pneumonia",
+            result=result,
+            inputs={"source": "local image feature store"},
+            feature_source="local_database",
+            feature_extraction_id=feature_extraction_id,
+            image_bytes=image_bytes,
+            extra={
+                "feature_extraction_id": feature_extraction_id,
+                "feature_source": "local_database",
+                "stored_preprocessing": stored_preprocessing,
+            },
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except FileNotFoundError as exc:
@@ -474,14 +568,12 @@ async def predict_eye(file: UploadFile = File(...)):
         if len(contents) == 0:
             raise HTTPException(status_code=400, detail="Uploaded image is empty.")
         result = model_service.predict_eye(contents)
-        return {
-            "success": True,
-            "data": result,
-            "clinical_report": clinical_report_service.build_report(
-                disease_key="eye", prediction=result,
-                inputs={"source_filename": file.filename or ""}, image_bytes=contents,
-            ),
-        }
+        return create_model_run_response(
+            disease_key="eye",
+            result=result,
+            inputs={"source_filename": file.filename or ""},
+            image_bytes=contents,
+        )
     except HTTPException:
         raise
     except FileNotFoundError as exc:
@@ -495,10 +587,9 @@ async def predict_eye(file: UploadFile = File(...)):
 def predict_breast_cancer(payload: BreastCancerInput):
     try:
         result = model_service.predict_breast_cancer(payload.features)
-        report = clinical_report_service.build_report(
-            disease_key="breast", prediction=result, inputs=payload.features
+        return create_model_run_response(
+            disease_key="breast", result=result, inputs=payload.features
         )
-        return {"success": True, "data": result, "clinical_report": report}
     except FileNotFoundError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
@@ -510,16 +601,17 @@ def predict_breast_cancer_from_feature_store(feature_extraction_id: str):
     try:
         features = load_model_features(feature_extraction_id, "breast")
         result = model_service.predict_breast_cancer(features)
-        return {
-            "success": True,
-            "data": result,
-            "clinical_report": clinical_report_service.build_report(
-                disease_key="breast", prediction=result, inputs=features,
-                feature_source="local_database", feature_extraction_id=feature_extraction_id,
-            ),
-            "feature_source": "local_database",
-            "feature_extraction_id": feature_extraction_id,
-        }
+        return create_model_run_response(
+            disease_key="breast",
+            result=result,
+            inputs=features,
+            feature_source="local_database",
+            feature_extraction_id=feature_extraction_id,
+            extra={
+                "feature_source": "local_database",
+                "feature_extraction_id": feature_extraction_id,
+            },
+        )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except FileNotFoundError as exc:
@@ -530,9 +622,63 @@ def predict_breast_cancer_from_feature_store(feature_extraction_id: str):
 
 @app.post("/api/reports/generate-narrative")
 def generate_report_narrative(payload: ReportNarrativeInput):
-    """Generate narrative only from an already validated structured report."""
+    """Legacy route that now enforces model-run clinician approval."""
     try:
-        return {"success": True, "data": clinical_report_service.generate_narrative(payload.report)}
+        model_run_id = payload.report.get("model_run_id")
+        if not model_run_id:
+            raise ValueError("An approved model_run_id is required for final report generation.")
+        approved_package = build_approved_report_package(model_run_id)
+        generated = clinical_report_service.generate_final_report(approved_package)
+        saved = save_final_report(model_run_id, approved_package, generated)
+        return {"success": True, "data": saved["final_report"], "model_run": saved}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.get("/api/model-runs/{model_run_id}")
+def get_model_run(model_run_id: str):
+    try:
+        return {"success": True, "data": load_model_run(model_run_id)}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/model-runs/{model_run_id}/review")
+def review_completed_model_run(model_run_id: str, payload: ModelRunReviewInput):
+    try:
+        return {
+            "success": True,
+            "data": review_model_run(
+                model_run_id,
+                decision=payload.decision,
+                reviewed_by=payload.reviewed_by,
+                comment=payload.comment,
+            ),
+        }
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@app.post("/api/model-runs/{model_run_id}/final-report")
+def generate_final_model_run_report(model_run_id: str):
+    """Make the only LLM call, strictly after clinician approval."""
+    try:
+        approved_package = build_approved_report_package(model_run_id)
+        generated = clinical_report_service.generate_final_report(approved_package)
+        saved = save_final_report(model_run_id, approved_package, generated)
+        return {"success": True, "data": saved["final_report"], "model_run": saved}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
 

@@ -51,6 +51,17 @@ venv/bin/uvicorn backend.main:app --reload
 The database records are ready for feature-store testing and retain
 `clinician_approval_status=pending`.
 
+Review and approve a record before inference:
+
+```bash
+curl http://127.0.0.1:8000/api/feature-extractions/sample-diabetes-low-risk/review
+
+curl -X POST \
+  -H 'Content-Type: application/json' \
+  -d '{"status":"approved","reviewed_by":"Synthetic Test Clinician","note":"Pipeline test only"}' \
+  http://127.0.0.1:8000/api/feature-extractions/sample-diabetes-low-risk/review
+```
+
 ## Test a seeded record
 
 ```bash
