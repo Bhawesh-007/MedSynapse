@@ -182,7 +182,7 @@ export default function DashboardHome({ setTab }) {
               style={{ padding: '10px 20px', fontSize: '0.95rem', background: '#0f172a' }}
             >
               <FileText size={16} />
-              <span>Smart Lab Report OCR Extraction</span>
+              <span>Upload Report</span>
               <ArrowRight size={15} />
             </button>
           </div>
