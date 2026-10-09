@@ -125,6 +125,82 @@ class ExplainabilityService:
         return report
 
     @staticmethod
+    def _monte_carlo_interventional_shap(*, predict_proba, model_input: np.ndarray,
+                                         background: np.ndarray, feature_names: list[str],
+                                         raw_values: dict, method_label: str,
+                                         sample_count: int = 256) -> dict:
+        """Estimate interventional Shapley values for wider tabular models.
+
+        The exact enumeration used for the small diabetes contract grows as
+        ``2**feature_count`` and is not practical for WDBC's 30 features.
+        This samples background rows and random feature orderings instead.  A
+        contribution remains the model-score change when one feature is added
+        to a coalition; averaging those marginal changes is a standard
+        Monte-Carlo Shapley estimator.  It is deterministic for a fixed input
+        and reference cohort so that a clinician can reproduce an audit.
+        """
+        feature_count = model_input.shape[1]
+        if feature_count == 0:
+            raise ValueError("Model input has no explainable features.")
+        if len(background) < 2:
+            raise ValueError("Reference background must contain at least two rows.")
+
+        seed = 20261009 + feature_count + len(background)
+        generator = np.random.default_rng(seed)
+        sample_count = max(32, int(sample_count))
+        background_indices = generator.integers(0, len(background), size=sample_count)
+        permutations = np.array([generator.permutation(feature_count) for _ in range(sample_count)])
+
+        # Each sampled ordering produces a baseline and one row after every
+        # additional feature. Predict the whole batch once for both speed and
+        # a single, auditable model invocation path.
+        trajectories = np.empty((sample_count, feature_count + 1, feature_count), dtype=float)
+        trajectories[:, 0, :] = background[background_indices]
+        for sample_index, ordering in enumerate(permutations):
+            current = trajectories[sample_index, 0, :].copy()
+            for step, feature_index in enumerate(ordering, start=1):
+                current = current.copy()
+                current[feature_index] = model_input[0, feature_index]
+                trajectories[sample_index, step, :] = current
+
+        probabilities = np.asarray(predict_proba(trajectories.reshape(-1, feature_count)))
+        if probabilities.ndim != 2 or probabilities.shape[1] < 1:
+            raise ValueError("predict_proba returned an incompatible shape")
+        positive_index = 1 if probabilities.shape[1] > 1 else 0
+        scores = probabilities[:, positive_index].reshape(sample_count, feature_count + 1)
+        marginal_changes = np.diff(scores, axis=1)
+        contributions = np.zeros(feature_count, dtype=float)
+        for sample_index, ordering in enumerate(permutations):
+            contributions[ordering] += marginal_changes[sample_index]
+        contributions /= sample_count
+
+        report = ExplainabilityService._contribution_report(
+            values=contributions,
+            base_value=scores[:, 0].mean(),
+            feature_names=feature_names,
+            raw_values=raw_values,
+            method=f"Monte-Carlo interventional Shapley approximation ({method_label})",
+            output_space="positive-class probability",
+        )
+        target_probability = float(predict_proba(model_input)[0, positive_index])
+        reconstructed = float(scores[:, 0].mean() + contributions.sum())
+        report["estimation"] = {
+            "sample_count": sample_count,
+            "background_rows": len(background),
+            "random_seed": seed,
+            "method": "random feature orderings over reference rows",
+        }
+        report["additivity_check"] = {
+            "reconstructed_probability": round(reconstructed, 6),
+            "model_probability": round(target_probability, 6),
+            "absolute_error": round(abs(reconstructed - target_probability), 12),
+        }
+        report["limitations"].append(
+            "Attributions are a deterministic Monte-Carlo Shapley approximation; small residual additivity error is expected."
+        )
+        return report
+
+    @staticmethod
     def tree_shap(*, model, transformed_input: np.ndarray, feature_names: list[str], raw_values: dict) -> dict:
         """Explain a tree-only classifier using the exact scaled inference values."""
         try:
@@ -184,14 +260,24 @@ class ExplainabilityService:
             import shap
         except ImportError:
             try:
-                report = ExplainabilityService._exact_interventional_shap(
-                    predict_proba=predict_proba,
-                    model_input=model_input,
-                    background=background,
-                    feature_names=feature_names,
-                    raw_values=raw_values,
-                    method_label=method_label,
-                )
+                if model_input.shape[1] <= 12:
+                    report = ExplainabilityService._exact_interventional_shap(
+                        predict_proba=predict_proba,
+                        model_input=model_input,
+                        background=background,
+                        feature_names=feature_names,
+                        raw_values=raw_values,
+                        method_label=method_label,
+                    )
+                else:
+                    report = ExplainabilityService._monte_carlo_interventional_shap(
+                        predict_proba=predict_proba,
+                        model_input=model_input,
+                        background=background,
+                        feature_names=feature_names,
+                        raw_values=raw_values,
+                        method_label=method_label,
+                    )
                 return ExplainabilityService._attach_reference_metadata(report, background_path)
             except Exception as exc:
                 return ExplainabilityService._missing_shap(

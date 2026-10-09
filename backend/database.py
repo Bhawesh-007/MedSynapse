@@ -466,9 +466,49 @@ def review_model_run(
     if not reviewed_by:
         raise ValueError("The clinician reviewer name or identifier is required.")
     normalized_comment = comment.strip() if comment and comment.strip() else None
+    if decision == "rejected" and not normalized_comment:
+        raise ValueError("A clinician rejection requires a review comment explaining the decision.")
+
+    normalized_verified_features = None
+    if verified_features is not None:
+        if not isinstance(verified_features, list) or any(
+            not isinstance(feature, str) or not feature.strip()
+            for feature in verified_features
+        ):
+            raise ValueError("Verified SHAP features must be a list of non-empty feature names.")
+        normalized_verified_features = list(dict.fromkeys(feature.strip() for feature in verified_features))
+
+    # Approval is an evidence decision, not an identifier/remarks form.  Read
+    # the immutable decision trace before persisting the review and require the
+    # clinician to explicitly select the SHAP drivers they verified.
+    current_run = load_model_run(model_run_id)
+    explainability = current_run["clinical_report"].get("explainability", {})
+    contributions = explainability.get("all_contributions", [])
+    available_features = {
+        item.get("feature") for item in contributions
+        if isinstance(item, dict) and isinstance(item.get("feature"), str)
+    }
+    if decision == "approved":
+        if current_run["disease_type"] in {"diabetes", "breast"} and not available_features:
+            raise ValueError(
+                "Clinician approval cannot be recorded because this tabular model run has no SHAP evidence to verify."
+            )
+        if available_features and not normalized_verified_features:
+            raise ValueError(
+                "Clinician approval requires selecting at least one verified SHAP feature driver."
+            )
+        unknown_features = set(normalized_verified_features or []) - available_features
+        if unknown_features:
+            raise ValueError(
+                "Verified SHAP features are not part of this model run: "
+                + ", ".join(sorted(unknown_features))
+            )
+    elif normalized_verified_features:
+        raise ValueError("This model run has no SHAP feature evidence to verify.")
+
     verified_features_json = (
-        json.dumps(verified_features, separators=(",", ":"), ensure_ascii=False)
-        if verified_features is not None
+        json.dumps(normalized_verified_features, separators=(",", ":"), ensure_ascii=False)
+        if normalized_verified_features is not None
         else None
     )
 
@@ -521,6 +561,26 @@ def build_approved_report_package(model_run_id: str) -> dict:
     # Filter explainability to only include clinician-verified SHAP features if specified
     explainability = json.loads(json.dumps(model_run["clinical_report"].get("explainability", {})))
     verified_features = decision.get("verified_features")
+    all_contributions = explainability.get("all_contributions", [])
+    available_features = {
+        item.get("feature") for item in all_contributions
+        if isinstance(item, dict) and isinstance(item.get("feature"), str)
+    }
+    if model_run["disease_type"] in {"diabetes", "breast"}:
+        if not available_features:
+            raise ValueError(
+                "Final report generation is blocked because this tabular model run has no SHAP evidence to verify."
+            )
+        if not isinstance(verified_features, list) or not verified_features:
+            raise ValueError(
+                "Final report generation requires clinician-verified SHAP feature drivers."
+            )
+        unknown_features = set(verified_features) - available_features
+        if unknown_features:
+            raise ValueError(
+                "The recorded clinician review contains SHAP features absent from this model run: "
+                + ", ".join(sorted(unknown_features))
+            )
     
     if verified_features is not None and isinstance(verified_features, list) and explainability:
         verified_set = set(verified_features)

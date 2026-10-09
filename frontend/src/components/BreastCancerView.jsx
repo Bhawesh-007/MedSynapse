@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { FileText, Ribbon } from 'lucide-react';
 import { predictBreastCancer } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
+import DiabetesPipelineProgressModal from './DiabetesPipelineProgressModal';
+import useDiabetesPipelineProgress from '../hooks/useDiabetesPipelineProgress';
 
 const BASE = ['radius', 'texture', 'perimeter', 'area', 'smoothness', 'compactness', 'concavity', 'concave_points', 'symmetry', 'fractal_dimension'];
 const FEATURES = ['mean', 'se', 'worst'].flatMap(metric => BASE.map(name => `${name}_${metric}`));
@@ -12,6 +14,7 @@ export default function BreastCancerView({ setTab, initialData }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const pipelineProgress = useDiabetesPipelineProgress();
 
   useEffect(() => {
     if (initialData) setFeatures(Object.fromEntries(FEATURES.map(name => [name, initialData[name] ?? ''])));
@@ -21,15 +24,28 @@ export default function BreastCancerView({ setTab, initialData }) {
     event.preventDefault();
     const missing = FEATURES.filter(name => features[name] === '');
     if (missing.length) return setError(`Enter all 30 WDBC FNA features. Missing: ${label(missing[0])}.`);
-    setLoading(true); setError(null);
+    setLoading(true); setError(null); setResult(null);
+    pipelineProgress.start();
     try {
       const response = await predictBreastCancer(Object.fromEntries(FEATURES.map(name => [name, Number(features[name])])));
       setResult(response);
-    } catch (err) { setError(err.message || 'Breast-cancer prediction failed'); }
+      pipelineProgress.transition('awaiting_review');
+    } catch (err) {
+      const message = err.message || 'Breast-cancer prediction failed';
+      setError(message);
+      pipelineProgress.fail(message, 'prediction');
+    }
     finally { setLoading(false); }
   };
 
   return <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
+    <DiabetesPipelineProgressModal
+      isOpen={pipelineProgress.isOpen}
+      stage={pipelineProgress.stage}
+      error={pipelineProgress.error}
+      failedAt={pipelineProgress.failedAt}
+      onClose={pipelineProgress.close}
+    />
     <div>
       <span className="badge badge-purple"><Ribbon size={13} /> WDBC FNA Tabular Model</span>
       <h1 style={{ fontSize: '2rem', fontWeight: 800, marginTop: '6px' }}>Breast Cancer Analyzer</h1>
@@ -46,6 +62,13 @@ export default function BreastCancerView({ setTab, initialData }) {
       {error && <p style={{ color: '#b42318', marginBottom: '1rem' }}>{error}</p>}
       <button className="btn-primary" disabled={loading} type="submit">{loading ? 'Running Breast Cancer Model…' : 'Run Breast Cancer Screening'}</button>
     </form>
-    {result && <DiagnosticResultCard result={result} title="Breast Cancer WDBC FNA Assessment" onReset={() => setResult(null)} />}
+    {result && (
+      <DiagnosticResultCard
+        result={result}
+        title="Breast Cancer WDBC FNA Assessment"
+        onWorkflowStageChange={pipelineProgress.handleWorkflowStageChange}
+        onReset={() => { setResult(null); pipelineProgress.reset(); }}
+      />
+    )}
   </div>;
 }

@@ -94,5 +94,13 @@ frontend/dist/
 .vite/
 frontend/.vite/
 
-# Output runs
+# Output runs & Raw Datasets Cache
 output/
+data/raw/
+data/explanations/
+
+# Temporary, scratch & lock files
+.~lock*
+*.excalidraw
+WhatsApp*
+

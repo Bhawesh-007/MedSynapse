@@ -370,7 +370,7 @@ async def parse_medical_report(
                 model_features=heart_result["model_features"],
                 extraction_status=heart_result["status"],
             )
-        if disease_type.lower() == "breast":
+        if disease_type.lower() in {"all", "breast"}:
             try:
                 breast_result = gemma_service.extract_breast_cancer_features(extracted_text)
             except GemmaServiceError as exc:
@@ -382,10 +382,14 @@ async def parse_medical_report(
                 if feature.get("status") == "extracted" and feature.get("value") is not None
             )
             response["extracted_count"] = max(response["extracted_count"], response["breast_extracted_count"])
-            response["jev_scoring"] = score_disease_suitability(
+            breast_score = score_disease_suitability(
                 parsed_data["parameters"], disease_type="breast",
                 breast_features=breast_result.get("features", {}),
             )
+            response["jev_scoring"] = [
+                score for score in response["jev_scoring"]
+                if score["disease"] != "Breast Cancer"
+            ] + breast_score
             response["breast_feature_extraction_id"] = save_feature_extraction(
                 disease_type="breast", source_filename=filename, report_text=extracted_text,
                 features=breast_result["features"], model_features=breast_result["model_features"],

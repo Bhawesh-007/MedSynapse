@@ -17,6 +17,13 @@ import {
 import { parseReportOCR, getSampleReports } from '../services/api';
 import OCRProgressModal from './OCRProgressModal';
 
+const REPORT_MODULES = [
+  { id: 'all', title: 'All report-compatible modules', description: 'Diabetes, cardiac, and breast WDBC extraction.' },
+  { id: 'diabetes', title: 'Diabetes Mellitus', description: 'Metabolic biomarker extraction.' },
+  { id: 'heart', title: 'Cardiac Health', description: 'Cardiovascular clinical feature extraction.' },
+  { id: 'breast', title: 'Breast Cancer', description: '30 labelled WDBC FNA morphology values.' },
+];
+
 export default function OCRScannerView({ onApplyParams, setTab }) {
   const [file, setFile] = useState(null);
   const [filePreview, setFilePreview] = useState(null);
@@ -26,6 +33,7 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
   const [ocrResult, setOcrResult] = useState(null);
   const [sampleReports, setSampleReports] = useState([]);
   const [selectedSampleId, setSelectedSampleId] = useState('');
+  const [selectedModule, setSelectedModule] = useState('all');
 
   // OCR Modal progress states
   const [ocrModalOpen, setOcrModalOpen] = useState(false);
@@ -99,7 +107,7 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
       const res = await parseReportOCR({
         file: uploadFile,
         rawText: uploadFile ? '' : textInput,
-        diseaseType: 'all',
+        diseaseType: selectedModule,
       });
       clearProgressTimeouts();
       setOcrStage('feature_store_saving');
@@ -142,7 +150,7 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
         stage={ocrStage}
         error={ocrModalError}
         onClose={() => setOcrModalOpen(false)}
-        diseaseType="all"
+        diseaseType={selectedModule}
         filename={file?.name || (selectedSampleId ? `Sample: ${selectedSampleId}` : 'Clinical Text Input')}
       />
 
@@ -197,6 +205,48 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
           ))}
         </div>
       </div>
+
+      {/* Feature-extraction target selector */}
+      <section className="glass-panel" style={{ padding: '1.25rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: '0.9rem' }}>
+          <div>
+            <h2 style={{ margin: 0, color: '#ffffff', fontSize: '1rem' }}>Select report-analysis module</h2>
+            <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
+              Select one module, or run all report-compatible models from the same document.
+            </p>
+          </div>
+          <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>OCR / report inputs only</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.7rem' }}>
+          {REPORT_MODULES.map(module => {
+            const selected = selectedModule === module.id;
+            return (
+              <button
+                key={module.id}
+                type="button"
+                onClick={() => {
+                  setSelectedModule(module.id);
+                  setOcrResult(null);
+                  setError(null);
+                }}
+                className="btn-secondary"
+                aria-pressed={selected}
+                style={{
+                  display: 'block', textAlign: 'left', minHeight: '78px', padding: '12px',
+                  border: selected ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.12)',
+                  background: selected ? 'rgba(14, 165, 233, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                }}
+              >
+                <strong style={{ display: 'block', color: '#ffffff', fontSize: '0.84rem' }}>{module.title}</strong>
+                <span style={{ display: 'block', marginTop: '5px', color: 'var(--text-muted)', fontSize: '0.73rem' }}>{module.description}</span>
+              </button>
+            );
+          })}
+        </div>
+        <p style={{ margin: '0.9rem 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
+          Pneumonia and eye-disease models require a chest X-ray or fundus image, respectively; use their dedicated upload modules because a text report cannot reproduce image-model input.
+        </p>
+      </section>
 
       {/* Upload Zone & Manual Text Entry */}
       <div style={{
@@ -376,6 +426,14 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
                   </code>
                 </div>
               )}
+              {ocrResult.breast_feature_extraction_id && (
+                <div>
+                  <strong>Breast Feature Extraction ID:</strong>{' '}
+                  <code style={{ background: '#dcfce7', padding: '2px 6px', borderRadius: '4px', fontFamily: 'var(--font-mono)' }}>
+                    {ocrResult.breast_feature_extraction_id}
+                  </code>
+                </div>
+              )}
             </div>
           </div>
 
@@ -443,18 +501,16 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
                 <ArrowRight size={16} />
               </button>
 
-              {ocrResult.gemma_breast_cancer && (
-                <button
-                  onClick={() => handleTransferToPredictor('breast')}
-                  disabled={ocrResult.gemma_breast_cancer.status !== 'ready_for_inference'}
-                  className="btn-primary"
-                  style={{ padding: '10px 18px' }}
-                  title={ocrResult.gemma_breast_cancer.status !== 'ready_for_inference' ? 'All 30 WDBC FNA features are required before screening.' : ''}
-                >
-                  <span>Apply to Breast Predictor</span>
-                  <ArrowRight size={16} />
-                </button>
-              )}
+              <button
+                onClick={() => handleTransferToPredictor('breast')}
+                disabled={ocrResult.gemma_breast_cancer?.status !== 'ready_for_inference'}
+                className="btn-primary"
+                style={{ padding: '10px 18px' }}
+                title={ocrResult.gemma_breast_cancer?.status !== 'ready_for_inference' ? 'All 30 explicitly labelled WDBC FNA features are required before screening.' : ''}
+              >
+                <span>Apply to Breast Predictor</span>
+                <ArrowRight size={16} />
+              </button>
             </div>
           </div>
 
