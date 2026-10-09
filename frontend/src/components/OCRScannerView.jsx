@@ -13,15 +13,112 @@ import {
   Database,
   ShieldCheck,
   Cpu,
+  ChevronLeft,
+  ChevronRight,
+  Droplets,
+  Heart,
+  Scan,
+  Brain,
+  Ribbon,
+  Activity,
+  Layers,
+  AlertTriangle,
+  Eye
 } from 'lucide-react';
 import { parseReportOCR, getSampleReports } from '../services/api';
 import OCRProgressModal from './OCRProgressModal';
 
 const REPORT_MODULES = [
-  { id: 'all', title: 'All report-compatible modules', description: 'Diabetes, cardiac, and breast WDBC extraction.' },
-  { id: 'diabetes', title: 'Diabetes Mellitus', description: 'Metabolic biomarker extraction.' },
-  { id: 'heart', title: 'Cardiac Health', description: 'Cardiovascular clinical feature extraction.' },
-  { id: 'breast', title: 'Breast Cancer', description: '30 labelled WDBC FNA morphology values.' },
+  { 
+    id: 'all', 
+    title: 'All Report Modules', 
+    description: 'Universal multi-biomarker extraction across all compatible panels.', 
+    tag: 'Full Multi-Disease Suite',
+    icon: Sparkles,
+    color: '#0284c7'
+  },
+  { 
+    id: 'diabetes', 
+    title: 'M1: Diabetes Mellitus', 
+    description: 'Glucose, Insulin, BMI, Blood Pressure, Skin Thickness, Age.', 
+    tag: 'Metabolic / ML',
+    icon: Droplets,
+    color: '#b42318'
+  },
+  { 
+    id: 'heart', 
+    title: 'M2: Cardiac Health', 
+    description: 'Resting BP, Serum Chol, Max HR, ST depression, Vessels.', 
+    tag: 'Cardiology / ML',
+    icon: Heart,
+    color: '#c81e1e'
+  },
+  { 
+    id: 'xray', 
+    title: 'M3: Pneumonia (X-Ray)', 
+    description: 'Pulmonary infiltration, consolidation & radiograph patterns.', 
+    tag: 'Pulmonology / Vision',
+    icon: Scan,
+    color: '#287a89',
+    tabId: 'xray',
+    isVision: true
+  },
+  { 
+    id: 'brain-tumor', 
+    title: 'M4: Brain Tumor (MRI)', 
+    description: 'Cranial MRI 4-class neoplasm tissue classification.', 
+    tag: 'Neuro-Oncology / Vision',
+    icon: Brain,
+    color: '#7c3aed',
+    tabId: 'brain-tumor',
+    isVision: true
+  },
+  { 
+    id: 'breast', 
+    title: 'M5: Breast Cancer (FNA)', 
+    description: '30 labelled WDBC fine-needle aspirate cytology features.', 
+    tag: 'Oncology / ML',
+    icon: Ribbon,
+    color: '#b83280'
+  },
+  { 
+    id: 'liver', 
+    title: 'M6: Liver Disease (LFT)', 
+    description: 'Bilirubin, SGOT/AST, SGPT/ALT, AlkPhos, Albumin/Globulin.', 
+    tag: 'Hepatology / ML',
+    icon: Activity,
+    color: '#d97706'
+  },
+  { 
+    id: 'kidney-stone', 
+    title: 'M7: Kidney Pathology (CT)', 
+    description: 'Renal calculi, cyst, tumor & normal tomography slices.', 
+    tag: 'Nephrology / Vision',
+    icon: Layers,
+    color: '#0284c7',
+    tabId: 'kidney-stone',
+    isVision: true
+  },
+  { 
+    id: 'skin-cancer', 
+    title: 'M8: Skin Cancer (HAM10000)', 
+    description: '7-class dermoscopy pigmented lesion classification.', 
+    tag: 'Dermatology / Vision',
+    icon: AlertTriangle,
+    color: '#dc2626',
+    tabId: 'skin-cancer',
+    isVision: true
+  },
+  { 
+    id: 'eye', 
+    title: 'M9: Eye Diseases (Fundus)', 
+    description: 'Fundus photography for DR, Glaucoma & Cataract.', 
+    tag: 'Ophthalmology / Vision',
+    icon: Eye,
+    color: '#6b46c1',
+    tabId: 'eye',
+    isVision: true
+  },
 ];
 
 export default function OCRScannerView({ onApplyParams, setTab }) {
@@ -40,6 +137,16 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
   const [ocrStage, setOcrStage] = useState('upload_reading');
   const [ocrModalError, setOcrModalError] = useState(null);
   const timeoutsRef = useRef([]);
+  const modulesScrollRef = useRef(null);
+
+  const scrollModules = (direction) => {
+    if (modulesScrollRef.current) {
+      modulesScrollRef.current.scrollBy({
+        left: direction === 'left' ? -280 : 280,
+        behavior: 'smooth'
+      });
+    }
+  };
 
   const clearProgressTimeouts = () => {
     timeoutsRef.current.forEach(t => clearTimeout(t));
@@ -208,43 +315,168 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
 
       {/* Feature-extraction target selector */}
       <section className="glass-panel" style={{ padding: '1.25rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'flex-start', flexWrap: 'wrap', marginBottom: '0.9rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: '0.75rem', alignItems: 'center', flexWrap: 'wrap', marginBottom: '0.9rem' }}>
           <div>
-            <h2 style={{ margin: 0, color: '#ffffff', fontSize: '1rem' }}>Select report-analysis module</h2>
+            <h2 style={{ margin: 0, color: 'var(--text-primary)', fontSize: '1rem', fontWeight: 700 }}>Select Report-Analysis Module</h2>
             <p style={{ margin: '4px 0 0', color: 'var(--text-muted)', fontSize: '0.78rem' }}>
-              Select one module, or run all report-compatible models from the same document.
+              Select one specialized module, or run all report-compatible models from the same document.
             </p>
           </div>
-          <span className="badge badge-cyan" style={{ fontSize: '0.68rem' }}>OCR / report inputs only</span>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <span className="badge badge-cyan" style={{ fontSize: '0.68rem', padding: '2px 8px' }}>10 Modules • Horizontal Scroll</span>
+            <button
+              type="button"
+              onClick={() => scrollModules('left')}
+              title="Scroll left"
+              style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              <ChevronLeft size={16} color="#334155" />
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollModules('right')}
+              title="Scroll right"
+              style={{
+                width: '30px',
+                height: '30px',
+                borderRadius: '6px',
+                border: '1px solid #cbd5e1',
+                backgroundColor: '#ffffff',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.05)'
+              }}
+            >
+              <ChevronRight size={16} color="#334155" />
+            </button>
+          </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(210px, 1fr))', gap: '0.7rem' }}>
+
+        {/* Scrollable Modules Track */}
+        <div 
+          ref={modulesScrollRef}
+          style={{ 
+            display: 'flex', 
+            gap: '0.85rem', 
+            overflowX: 'auto',
+            paddingBottom: '0.85rem',
+            paddingTop: '0.2rem',
+            scrollSnapType: 'x mandatory',
+            WebkitOverflowScrolling: 'touch',
+            scrollbarWidth: 'thin',
+            scrollbarColor: '#94a3b8 #f1f5f9'
+          }}
+        >
           {REPORT_MODULES.map(module => {
             const selected = selectedModule === module.id;
+            const Icon = module.icon || Sparkles;
             return (
-              <button
+              <div
                 key={module.id}
-                type="button"
                 onClick={() => {
                   setSelectedModule(module.id);
                   setOcrResult(null);
                   setError(null);
                 }}
-                className="btn-secondary"
-                aria-pressed={selected}
                 style={{
-                  display: 'block', textAlign: 'left', minHeight: '78px', padding: '12px',
-                  border: selected ? '1px solid #38bdf8' : '1px solid rgba(255, 255, 255, 0.12)',
-                  background: selected ? 'rgba(14, 165, 233, 0.12)' : 'rgba(255, 255, 255, 0.03)',
+                  flex: '0 0 250px',
+                  scrollSnapAlign: 'start',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  justifyContent: 'space-between',
+                  minHeight: '118px',
+                  padding: '12px 14px',
+                  borderRadius: '10px',
+                  border: selected ? '2px solid #0284c7' : '1px solid #e2e8f0',
+                  backgroundColor: selected ? '#f0f9ff' : '#ffffff',
+                  boxShadow: selected ? '0 4px 12px rgba(2, 132, 199, 0.12)' : '0 1px 3px rgba(0,0,0,0.04)',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease',
+                  userSelect: 'none'
                 }}
               >
-                <strong style={{ display: 'block', color: '#ffffff', fontSize: '0.84rem' }}>{module.title}</strong>
-                <span style={{ display: 'block', marginTop: '5px', color: 'var(--text-muted)', fontSize: '0.73rem' }}>{module.description}</span>
-              </button>
+                <div>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <div style={{
+                        width: '26px',
+                        height: '26px',
+                        borderRadius: '6px',
+                        backgroundColor: selected ? '#0284c7' : '#f1f5f9',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center'
+                      }}>
+                        <Icon size={14} color={selected ? '#ffffff' : (module.color || '#475569')} />
+                      </div>
+                      <span style={{ fontSize: '0.64rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.4px', color: module.color || '#64748b' }}>
+                        {module.tag}
+                      </span>
+                    </div>
+                    {selected && (
+                      <span style={{ fontSize: '0.6rem', fontWeight: 700, color: '#0284c7', backgroundColor: '#e0f2fe', padding: '1px 5px', borderRadius: '4px' }}>
+                        SELECTED
+                      </span>
+                    )}
+                  </div>
+
+                  <strong style={{ display: 'block', color: '#0f172a', fontSize: '0.86rem', fontWeight: 700, marginBottom: '4px' }}>
+                    {module.title}
+                  </strong>
+                  <span style={{ display: 'block', color: '#64748b', fontSize: '0.74rem', lineHeight: '1.35' }}>
+                    {module.description}
+                  </span>
+                </div>
+
+                {module.isVision && (
+                  <div style={{ marginTop: '8px', paddingTop: '6px', borderTop: '1px dashed #e2e8f0', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <span style={{ fontSize: '0.68rem', color: '#64748b' }}>Vision imaging</span>
+                    {setTab && (
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setTab(module.tabId);
+                        }}
+                        style={{
+                          fontSize: '0.68rem',
+                          color: '#0284c7',
+                          fontWeight: 700,
+                          background: 'transparent',
+                          border: 'none',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '2px',
+                          padding: 0
+                        }}
+                      >
+                        Direct Scan →
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
             );
           })}
         </div>
+
         <p style={{ margin: '0.9rem 0 0', color: 'var(--text-muted)', fontSize: '0.75rem' }}>
-          Pneumonia and eye-disease models require a chest X-ray or fundus image, respectively; use their dedicated upload modules because a text report cannot reproduce image-model input.
+          Pneumonia, cranial brain MRI, renal CT, skin dermoscopy, and retinal fundus models require high-resolution scans; use their dedicated upload modules or click <strong>Direct Scan →</strong> above for dedicated imaging inference.
         </p>
       </section>
 

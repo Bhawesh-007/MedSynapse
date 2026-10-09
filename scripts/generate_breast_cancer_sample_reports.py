@@ -8,7 +8,6 @@ from pathlib import Path
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
-from reportlab.pdfbase.pdfmetrics import stringWidth
 from reportlab.pdfgen.canvas import Canvas
 
 

@@ -13,6 +13,13 @@ This folder contains diverse dummy clinical reports and diagnostic scan files ac
 | **`03_healthy_annual_wellness`** | `.pdf`, `.png`, `.txt` | **Healthy Baseline / Executive Checkup** | 🩸 Diabetes / ❤️ Heart | Glucose: `84 mg/dL`, BP: `116/74`, Cholesterol: `165 mg/dL`, BMI: `21.4` |
 | **`04_prediabetic_borderline_report`** | `.pdf`, `.png`, `.txt` | **Prediabetic / Borderline Risk** | 🩸 Diabetes | Glucose: `114 mg/dL`, BP: `128/82`, Cholesterol: `218 mg/dL`, BMI: `27.6` |
 | **`05_sample_chest_xray.png`** | `.png` | **Chest Radiograph (X-Ray)** | 🩻 Pneumonia | Synthetic lung field radiograph scan |
+| **`06_sample_brain_mri.png`** | `.png` | **Brain MRI image fixture** | 🧠 Brain tumour | Synthetic MRI image input |
+| **`07_breast_fna_complete_case_a`** | `.pdf`, `.png`, `.txt` | **Complete WDBC FNA profile** | 🎗️ Breast cancer | All 30 morphometric features |
+| **`08_breast_fna_complete_case_b`** | `.pdf`, `.png`, `.txt` | **Second complete WDBC FNA profile** | 🎗️ Breast cancer | All 30 morphometric features |
+| **`09_breast_fna_incomplete_review_case`** | `.pdf`, `.png`, `.txt` | **Incomplete WDBC FNA profile** | 🎗️ Breast cancer | 10 of 30 features; review required |
+| **`10_eye_fundus_normal_screening`** | `.pdf`, `.png`, `.txt` | **Normal reference screening scenario** | 👁️ Eye disease | Document/OCR fixture; fundus image remains model input |
+| **`11_eye_fundus_retinopathy_referral`** | `.pdf`, `.png`, `.txt` | **Retinopathy referral scenario** | 👁️ Eye disease | Document/OCR fixture; clinician review scenario |
+| **`12_eye_fundus_glaucoma_review`** | `.pdf`, `.png`, `.txt` | **Glaucoma review scenario** | 👁️ Eye disease | Document/OCR fixture; clinician review scenario |
 
 ---
 
@@ -31,3 +38,4 @@ This folder contains diverse dummy clinical reports and diagnostic scan files ac
 
 ### 3️⃣ Testing Medical Scans
 - Upload `05_sample_chest_xray.png` in the **Pneumonia X-Ray** tab.
+- Eye reports test document handling only. Upload a compatible color fundus image in the **Eye Disease** tab because the eye classifier does not consume report text.
