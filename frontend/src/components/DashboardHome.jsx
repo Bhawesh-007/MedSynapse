@@ -268,7 +268,6 @@ export default function DashboardHome({ setTab }) {
                       <Icon size={22} color="#0f172a" />
                     </div>
                     <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                      <span style={{ fontSize: '0.7rem', fontWeight: 800, fontFamily: 'monospace', color: '#64748b' }}>{mod.code}</span>
                       <span className={`badge ${mod.badgeColor}`}>{mod.badge}</span>
                     </div>
                   </div>

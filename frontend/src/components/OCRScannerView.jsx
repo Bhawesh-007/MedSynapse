@@ -39,7 +39,7 @@ const REPORT_MODULES = [
   },
   { 
     id: 'diabetes', 
-    title: 'M1: Diabetes Mellitus', 
+    title: 'Diabetes Mellitus', 
     description: 'Glucose, Insulin, BMI, Blood Pressure, Skin Thickness, Age.', 
     tag: 'Metabolic / ML',
     icon: Droplets,
@@ -47,7 +47,7 @@ const REPORT_MODULES = [
   },
   { 
     id: 'heart', 
-    title: 'M2: Cardiac Health', 
+    title: 'Cardiac Health', 
     description: 'Resting BP, Serum Chol, Max HR, ST depression, Vessels.', 
     tag: 'Cardiology / ML',
     icon: Heart,
@@ -55,7 +55,7 @@ const REPORT_MODULES = [
   },
   { 
     id: 'xray', 
-    title: 'M3: Pneumonia (X-Ray)', 
+    title: 'Pneumonia (X-Ray)', 
     description: 'Pulmonary infiltration, consolidation & radiograph patterns.', 
     tag: 'Pulmonology / Vision',
     icon: Scan,
@@ -65,7 +65,7 @@ const REPORT_MODULES = [
   },
   { 
     id: 'brain-tumor', 
-    title: 'M4: Brain Tumor (MRI)', 
+    title: 'Brain Tumor (MRI)', 
     description: 'Cranial MRI 4-class neoplasm tissue classification.', 
     tag: 'Neuro-Oncology / Vision',
     icon: Brain,
@@ -75,7 +75,7 @@ const REPORT_MODULES = [
   },
   { 
     id: 'breast', 
-    title: 'M5: Breast Cancer (FNA)', 
+    title: 'Breast Cancer (FNA)', 
     description: '30 labelled WDBC fine-needle aspirate cytology features.', 
     tag: 'Oncology / ML',
     icon: Ribbon,
@@ -83,7 +83,7 @@ const REPORT_MODULES = [
   },
   { 
     id: 'liver', 
-    title: 'M6: Liver Disease (LFT)', 
+    title: 'Liver Disease (LFT)', 
     description: 'Bilirubin, SGOT/AST, SGPT/ALT, AlkPhos, Albumin/Globulin.', 
     tag: 'Hepatology / ML',
     icon: Activity,
@@ -91,7 +91,7 @@ const REPORT_MODULES = [
   },
   { 
     id: 'kidney-stone', 
-    title: 'M7: Kidney Pathology (CT)', 
+    title: 'Kidney Pathology (CT)', 
     description: 'Renal calculi, cyst, tumor & normal tomography slices.', 
     tag: 'Nephrology / Vision',
     icon: Layers,
@@ -101,7 +101,7 @@ const REPORT_MODULES = [
   },
   { 
     id: 'skin-cancer', 
-    title: 'M8: Skin Cancer (HAM10000)', 
+    title: 'Skin Cancer (HAM10000)', 
     description: '7-class dermoscopy pigmented lesion classification.', 
     tag: 'Dermatology / Vision',
     icon: AlertTriangle,
@@ -111,7 +111,7 @@ const REPORT_MODULES = [
   },
   { 
     id: 'eye', 
-    title: 'M9: Eye Diseases (Fundus)', 
+    title: 'Eye Diseases (Fundus)', 
     description: 'Fundus photography for DR, Glaucoma & Cataract.', 
     tag: 'Ophthalmology / Vision',
     icon: Eye,
