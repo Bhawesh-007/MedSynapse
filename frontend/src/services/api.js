@@ -163,3 +163,17 @@ export async function generateFinalReport(modelRunId) {
   }
   return res.json();
 }
+
+export async function queryClinicalCopilot({ modelRunId, messages }) {
+  const res = await fetch(`${API_BASE_URL}/api/chat/copilot`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model_run_id: modelRunId, messages }),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.detail || 'Clinical copilot query failed');
+  }
+  return res.json();
+}
+

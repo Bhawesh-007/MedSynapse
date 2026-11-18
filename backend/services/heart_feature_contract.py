@@ -53,6 +53,8 @@ Each object must contain value, unit, source_text, page, confidence, and status.
 Allowed status values are extracted, missing, ambiguous, unsupported_document.
 Extract only explicitly stated values. Never infer or use defaults. An extracted
 value requires exact source_text, one-based page, and confidence from 0 to 1.
+Read the entire report, including headers, tables, and every page, before
+marking a feature missing.
 Use the standard UCI heart-disease meanings: CP=chest-pain category, FastingBloodSugar
 is 0/1 for fasting glucose >120 mg/dL, RestingECG=0/1/2, ExerciseAngina=0/1,
 Slope=0/1/2, MajorVessels=0-3, and Thalassemia uses the dataset category code."""

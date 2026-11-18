@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Brain, CircleDot, Image as ImageIcon, RefreshCw, Upload } from 'lucide-react';
+import { CircleDot, Image as ImageIcon, RefreshCw, Upload } from 'lucide-react';
 import DiagnosticResultCard from './DiagnosticResultCard';
 
 const MODEL_COPY = {
@@ -8,13 +8,6 @@ const MODEL_COPY = {
     icon: CircleDot,
     description: 'Upload a fundus or ocular scan for the future eye-disease model.',
     endpointLabel: 'Eye image',
-    accept: 'image/*',
-  },
-  breast: {
-    title: 'Breast Cancer Analyzer',
-    icon: Brain,
-    description: 'Upload a mammogram or breast scan for the future breast-cancer model.',
-    endpointLabel: 'Breast image',
     accept: 'image/*',
   },
 };

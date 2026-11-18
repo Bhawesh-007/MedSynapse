@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { Upload, FileText, CheckCircle2, AlertCircle, Sparkles, ArrowRight, Play, RefreshCw, FileCode, Check } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Upload, FileText, CheckCircle2, AlertCircle, Sparkles, ArrowRight, Play, RefreshCw, FileCode } from 'lucide-react';
 import { parseReportOCR, getSampleReports } from '../services/api';
+import OCRProgressModal from './OCRProgressModal';
 
 export default function OCRScannerView({ onApplyParams, setTab }) {
   const [file, setFile] = useState(null);
@@ -12,6 +13,19 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
   const [sampleReports, setSampleReports] = useState([]);
   const [selectedSampleId, setSelectedSampleId] = useState('');
   const [diseaseType, setDiseaseType] = useState('all');
+
+  // OCR modal progress state
+  const [ocrModalOpen, setOcrModalOpen] = useState(false);
+  const [ocrStage, setOcrStage] = useState('upload_reading');
+  const [ocrModalError, setOcrModalError] = useState(null);
+  const timeoutsRef = useRef([]);
+
+  const clearProgressTimeouts = () => {
+    timeoutsRef.current.forEach((t) => clearTimeout(t));
+    timeoutsRef.current = [];
+  };
+
+  useEffect(() => () => clearProgressTimeouts(), []);
 
   // Load sample clinical reports on mount
   useEffect(() => {
@@ -49,15 +63,42 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
 
     setLoading(true);
     setError(null);
+    setOcrModalError(null);
+    setOcrStage('upload_reading');
+    setOcrModalOpen(true);
+    clearProgressTimeouts();
+
+    // Stage 1 -> Stage 2: OCR Extraction (~1.4s)
+    const t1 = setTimeout(() => {
+      setOcrStage('ocr_extraction');
+    }, 1400);
+
+    // Stage 2 -> Stage 3: Gemma Neural Extraction (~4.2s)
+    const t2 = setTimeout(() => {
+      setOcrStage('gemma_extraction');
+    }, 4200);
+
+    timeoutsRef.current = [t1, t2];
+
     try {
       const res = await parseReportOCR({
         file: uploadFile,
         rawText: uploadFile ? '' : textInput,
-        diseaseType
+        diseaseType,
       });
-      setOcrResult(res);
+      clearProgressTimeouts();
+      setOcrStage('feature_store_saving');
+
+      // Brief transition to show database persistence before completing
+      setTimeout(() => {
+        setOcrResult(res);
+        setOcrStage('complete');
+      }, 600);
     } catch (err) {
-      setError(err.message || 'Failed to process document OCR');
+      clearProgressTimeouts();
+      const message = err.message || 'Failed to process document OCR';
+      setError(message);
+      setOcrModalError(message);
     } finally {
       setLoading(false);
     }
@@ -82,6 +123,15 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <OCRProgressModal
+        isOpen={ocrModalOpen}
+        stage={ocrStage}
+        error={ocrModalError}
+        onClose={() => setOcrModalOpen(false)}
+        diseaseType={diseaseType}
+        filename={file?.name || (selectedSampleId ? `Sample: ${selectedSampleId}` : 'Clinical Text Input')}
+      />
+
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -136,12 +186,13 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
 
       <div className="glass-panel" style={{ padding: '1rem', display: 'flex', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>
         <label className="form-label" htmlFor="ocr-disease-type">Target extraction pipeline</label>
-        <select id="ocr-disease-type" className="form-select" value={diseaseType} onChange={event => setDiseaseType(event.target.value)} style={{ maxWidth: '300px' }}>
-          <option value="all">General report (Diabetes / Heart)</option>
+        <select id="ocr-disease-type" className="form-select" value={diseaseType} onChange={event => setDiseaseType(event.target.value)} style={{ maxWidth: '340px' }}>
+          <option value="all">All disease feature contracts (Diabetes / Heart / Breast)</option>
           <option value="diabetes">Diabetes feature pipeline</option>
           <option value="heart">Coronary heart feature pipeline</option>
           <option value="breast">Breast cancer WDBC FNA pipeline</option>
         </select>
+        {diseaseType === 'all' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Gemma reads the full OCR text, attempts every required feature, and JEV ranks the best-supported disease routes.</span>}
         {diseaseType === 'breast' && <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Use a pathology/FNA report containing all 30 morphology measurements.</span>}
       </div>
 
@@ -304,9 +355,27 @@ export default function OCRScannerView({ onApplyParams, setTab }) {
                     <div style={{ fontSize: '0.72rem', color: 'var(--text-muted)', marginTop: '6px' }}>
                       {score.status === 'ready_for_routing' ? 'Evidence complete for routing' : `Missing: ${score.missing_features.join(', ')}`}
                     </div>
+                    <div style={{ fontSize: '0.68rem', color: 'var(--text-muted)', marginTop: '4px' }}>
+                      {score.available_feature_count}/{score.required_feature_count} features · {score.source}
+                    </div>
                   </div>
                 ))}
               </div>
+            </div>
+          )}
+          {ocrResult.gemma_diabetes && (
+            <div style={{ marginBottom: '1.5rem', padding: '0.9rem', border: '1px solid var(--border-card)', borderRadius: '10px', background: '#f5faf6' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
+                <strong style={{ color: 'var(--text-primary)' }}>Gemma diabetes feature extraction</strong>
+                <span className={`badge ${ocrResult.gemma_diabetes.status === 'ready_for_inference' ? 'badge-success' : 'badge-warning'}`}>
+                  {ocrResult.gemma_diabetes.status}
+                </span>
+              </div>
+              {ocrResult.gemma_diabetes.missing_or_unverified?.length > 0 && (
+                <div style={{ marginTop: '6px', fontSize: '0.78rem', color: 'var(--text-muted)' }}>
+                  Missing or review-required: {ocrResult.gemma_diabetes.missing_or_unverified.join(', ')}
+                </div>
+              )}
             </div>
           )}
           {ocrResult.gemma_heart && (

@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Check,
   Circle,
@@ -151,7 +152,7 @@ export default function DiabetesPipelineProgressModal({
   const isComplete = stage === 'complete';
   const isRejected = stage === 'rejected';
 
-  return (
+  const modalContent = (
     <div className="pipeline-modal-backdrop" role="presentation">
       <section
         className="pipeline-modal"
@@ -225,4 +226,6 @@ export default function DiabetesPipelineProgressModal({
       </section>
     </div>
   );
+
+  return createPortal(modalContent, document.body);
 }

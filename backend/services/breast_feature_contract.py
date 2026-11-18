@@ -37,7 +37,7 @@ def breast_extraction_prompt() -> str:
 
 Return JSON only: {{"features": {{"feature_name": {{"value": number or null, "unit": string or null, "source_text": string or null, "page": integer or null, "confidence": number or null, "status": "extracted|missing|ambiguous|unsupported_document"}}}}}}.
 Include every feature exactly once: {names}.
-Extract only explicitly stated values. Never infer, estimate, convert, or use mammogram/image observations. An extracted value requires exact source_text, a one-based page, and confidence from 0 to 1. Mark unavailable values as missing."""
+Extract only explicitly stated values. Never infer, estimate, convert, or use mammogram/image observations. An extracted value requires exact source_text, a one-based page, and confidence from 0 to 1. Read the entire report, including headers, tables, and every page, before marking a value missing. Mark unavailable values as missing."""
 
 
 def breast_extraction_json_schema() -> dict[str, Any]:
