@@ -2,6 +2,7 @@ import os
 import sys
 import io
 import traceback
+import asyncio
 from pathlib import Path
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -37,8 +38,11 @@ try:
     from backend.services.gemma_service import GemmaService, GemmaServiceError
     from backend.services.jev_scoring import score_disease_suitability
     from backend.services.feature_resolution import resolve_features
-    from backend.services.heart_feature_contract import HEART_API_NAMES
     from backend.services.clinical_report_service import ClinicalReportService
+    from backend.services.clinical_copilot_service import (
+        ClinicalCopilotService,
+        ClinicalCopilotError,
+    )
 except ImportError:
     from database import (
         build_approved_report_package,
@@ -59,8 +63,11 @@ except ImportError:
     from services.gemma_service import GemmaService, GemmaServiceError
     from services.jev_scoring import score_disease_suitability
     from services.feature_resolution import resolve_features
-    from services.heart_feature_contract import HEART_API_NAMES
     from services.clinical_report_service import ClinicalReportService
+    from services.clinical_copilot_service import (
+        ClinicalCopilotService,
+        ClinicalCopilotError,
+    )
 
 app = FastAPI(
     title="MedSynapse Clinical Diagnostic API",
@@ -86,6 +93,82 @@ app.add_middleware(
 model_service = ModelService.get_instance()
 gemma_service = GemmaService()
 clinical_report_service = ClinicalReportService(model_service, BASE_DIR)
+clinical_copilot_service = ClinicalCopilotService()
+
+
+def extract_diabetes_with_gemma(extracted_text: str) -> dict[str, Any]:
+    """Extract validated diabetes features from OCR text with local Gemma.
+
+    Gemma owns its own configured timeout (``GEMMA_TIMEOUT_SECONDS``); the
+    request is offloaded with ``asyncio.to_thread`` so the event loop stays
+    responsive while the model works.  If Gemma cannot produce a usable
+    extraction, the response is marked unavailable instead of substituting
+    previously stored values.
+    """
+    try:
+        result = gemma_service.extract_diabetes_features(extracted_text)
+        result["extraction_mode"] = (
+            "not_configured"
+            if result.get("status") == "not_configured"
+            else "live_gemma"
+        )
+        return result
+    except GemmaServiceError as exc:
+        return {
+            "status": "unavailable",
+            "message": f"Gemma did not return a usable extraction: {exc}",
+            "features": {},
+            "missing_or_unverified": [],
+            "model_features": None,
+            "extraction_mode": "unavailable",
+        }
+
+
+def extract_heart_with_gemma(extracted_text: str) -> dict[str, Any]:
+    """Extract the 13 validated heart features from OCR text with local Gemma."""
+    try:
+        result = gemma_service.extract_heart_features(extracted_text)
+        result["extraction_mode"] = (
+            "not_configured"
+            if result.get("status") == "not_configured"
+            else "live_gemma"
+        )
+        return result
+    except GemmaServiceError as exc:
+        return {
+            "status": "unavailable",
+            "message": f"Gemma did not return a usable extraction: {exc}",
+            "features": {},
+            "missing_or_unverified": [],
+            "model_features": None,
+            "extraction_mode": "unavailable",
+        }
+
+
+def extract_breast_cancer_with_gemma(extracted_text: str) -> dict[str, Any]:
+    """Extract validated WDBC features from OCR text with local Gemma.
+
+    This follows the diabetes extraction pipeline exactly, except that it has
+    no precomputed fallback: if the live extraction fails, the response is
+    marked unavailable rather than substituting previously stored values.
+    """
+    try:
+        result = gemma_service.extract_breast_cancer_features(extracted_text)
+        result["extraction_mode"] = (
+            "not_configured"
+            if result.get("status") == "not_configured"
+            else "live_gemma"
+        )
+        return result
+    except GemmaServiceError as exc:
+        return {
+            "status": "unavailable",
+            "message": f"Gemma did not return a usable extraction: {exc}",
+            "features": {},
+            "missing_or_unverified": [],
+            "model_features": None,
+            "extraction_mode": "unavailable",
+        }
 
 # Pydantic Schemas
 class DiabetesInput(BaseModel):
@@ -133,6 +216,16 @@ class ModelRunReviewInput(BaseModel):
     reviewed_by: str = Field(min_length=1, max_length=120)
     comment: Optional[str] = Field(default=None, max_length=2000)
     verified_features: Optional[List[str]] = None
+
+
+class CopilotMessage(BaseModel):
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=4000)
+
+
+class CopilotChatRequest(BaseModel):
+    model_run_id: str = Field(min_length=1)
+    messages: list[CopilotMessage] = Field(default_factory=list)
 
 
 def create_model_run_response(
@@ -270,7 +363,7 @@ async def parse_medical_report(
     raw_text: Optional[str] = Form(None),
     disease_type: str = Form("all")
 ):
-    """Parses an uploaded lab report (PDF/image) or raw report text and extracts clinical parameters."""
+    """OCR a report, extract every requested disease contract with Gemma, persist it, and score JEV routing."""
     try:
         extracted_text = ""
         filename = ""
@@ -307,94 +400,96 @@ async def parse_medical_report(
             "feature_resolution_log": feature_resolution_log,
             "ready_inputs": parsed_data["ready_inputs"]
         }
-        response["jev_scoring"] = score_disease_suitability(
-            resolved_parameters, disease_type=disease_type
-        )
-        # Existing OCR and regex extraction remain the first stage. Gemma only
-        # consumes the OCR text afterwards and returns separately auditable
-        # diabetes evidence; it does not overwrite the OCR response.
+        # Gemma reads the complete OCR text for every requested disease. The
+        # contracts documented in features_required.md validate each extraction
+        # before it is persisted; JEV then scores the stored family of
+        # evidence so the strongest and weakest disease routes are visible.
+        gemma_features_by_disease: dict[str, dict[str, Any]] = {}
+        feature_extraction_ids: dict[str, str] = {}
+
         if disease_type.lower() in {"all", "diabetes"}:
-            try:
-                response["gemma_diabetes"] = gemma_service.extract_diabetes_features(extracted_text)
-            except GemmaServiceError as exc:
-                response["gemma_diabetes"] = {
-                    "status": "unavailable",
-                    "message": str(exc),
-                    "features": {},
-                    "missing_or_unverified": [],
-                    "model_features": None,
-                }
-            gemma_result = response["gemma_diabetes"]
-            response["feature_extraction_id"] = save_feature_extraction(
+            # Local Gemma can take longer than a web request. Run it in a
+            # worker so health checks and other API routes stay responsive
+            # while the model works through its own configured timeout.
+            diabetes_result = await asyncio.to_thread(
+                extract_diabetes_with_gemma, extracted_text
+            )
+            response["gemma_diabetes"] = diabetes_result
+            gemma_features_by_disease["diabetes"] = diabetes_result.get("features", {})
+            feature_extraction_ids["diabetes"] = save_feature_extraction(
                 disease_type="diabetes",
                 source_filename=filename,
                 report_text=extracted_text,
                 features={
                     "ocr_parameters": resolved_parameters,
-                    "gemma_features": gemma_result["features"],
+                    "gemma_features": diabetes_result.get("features", {}),
                 },
-                model_features=gemma_result["model_features"],
-                extraction_status=gemma_result["status"],
+                model_features=diabetes_result.get("model_features"),
+                extraction_status=diabetes_result["status"],
             )
+            response["feature_extraction_id"] = feature_extraction_ids["diabetes"]
+
         if disease_type.lower() in {"all", "heart"}:
-            try:
-                heart_result = gemma_service.extract_heart_features(extracted_text)
-            except GemmaServiceError as exc:
-                heart_result = {
-                    "status": "unavailable",
-                    "message": str(exc),
-                    "features": {},
-                    "missing_or_unverified": [],
-                    "model_features": None,
-                }
+            heart_result = await asyncio.to_thread(
+                extract_heart_with_gemma, extracted_text
+            )
             response["gemma_heart"] = heart_result
-            heart_parameters = {
-                HEART_API_NAMES[name]: feature
-                for name, feature in heart_result.get("features", {}).items()
-                if name in HEART_API_NAMES
-            }
-            if heart_parameters:
-                heart_score = score_disease_suitability(heart_parameters, disease_type="heart")
-                response["jev_scoring"] = [
-                    score for score in response["jev_scoring"]
-                    if score["disease"] != "Coronary Heart Disease"
-                ] + heart_score
-            response["heart_feature_extraction_id"] = save_feature_extraction(
+            gemma_features_by_disease["heart"] = heart_result.get("features", {})
+            feature_extraction_ids["heart"] = save_feature_extraction(
                 disease_type="heart",
                 source_filename=filename,
                 report_text=extracted_text,
                 features={
                     "ocr_parameters": resolved_parameters,
-                    "gemma_features": heart_result["features"],
+                    "gemma_features": heart_result.get("features", {}),
                 },
-                model_features=heart_result["model_features"],
+                model_features=heart_result.get("model_features"),
                 extraction_status=heart_result["status"],
             )
+            response["heart_feature_extraction_id"] = feature_extraction_ids["heart"]
+
         if disease_type.lower() in {"all", "breast"}:
-            try:
-                breast_result = gemma_service.extract_breast_cancer_features(extracted_text)
-            except GemmaServiceError as exc:
-                breast_result = {"status": "unavailable", "message": str(exc), "features": {}, "missing_or_unverified": [], "model_features": None}
+            # The breast contract is the 30 WDBC fields from
+            # features_required.md; Gemma reads the same complete OCR text.
+            breast_result = await asyncio.to_thread(
+                extract_breast_cancer_with_gemma, extracted_text
+            )
             response["gemma_breast_cancer"] = breast_result
-            response["breast_features"] = breast_result["features"]
+            response["breast_features"] = breast_result.get("features", {})
             response["breast_extracted_count"] = sum(
-                1 for feature in breast_result["features"].values()
+                1 for feature in response["breast_features"].values()
                 if feature.get("status") == "extracted" and feature.get("value") is not None
             )
             response["extracted_count"] = max(response["extracted_count"], response["breast_extracted_count"])
-            breast_score = score_disease_suitability(
-                parsed_data["parameters"], disease_type="breast",
-                breast_features=breast_result.get("features", {}),
-            )
-            response["jev_scoring"] = [
-                score for score in response["jev_scoring"]
-                if score["disease"] != "Breast Cancer"
-            ] + breast_score
-            response["breast_feature_extraction_id"] = save_feature_extraction(
-                disease_type="breast", source_filename=filename, report_text=extracted_text,
-                features=breast_result["features"], model_features=breast_result["model_features"],
+            # Only treat the WDBC evidence as Gemma output when the live model
+            # actually produced it; otherwise JEV scores the deterministic
+            # label evidence and labels the source accordingly.
+            if breast_result.get("extraction_mode") == "live_gemma":
+                gemma_features_by_disease["breast"] = response["breast_features"]
+            feature_extraction_ids["breast"] = save_feature_extraction(
+                disease_type="breast",
+                source_filename=filename,
+                report_text=extracted_text,
+                features={
+                    "ocr_parameters": resolved_parameters,
+                    "gemma_features": response["breast_features"],
+                },
+                model_features=breast_result.get("model_features"),
                 extraction_status=breast_result["status"],
             )
+            # Keep the disease-specific key used by existing clients. For a
+            # targeted breast upload, expose it as the generic ID too.
+            response["breast_feature_extraction_id"] = feature_extraction_ids["breast"]
+            if disease_type.lower() == "breast":
+                response["feature_extraction_id"] = feature_extraction_ids["breast"]
+
+        response["feature_extraction_ids"] = feature_extraction_ids
+        response["jev_scoring"] = score_disease_suitability(
+            resolved_parameters,
+            disease_type=disease_type,
+            breast_features=response.get("breast_features"),
+            gemma_features=gemma_features_by_disease,
+        )
         return response
     except Exception as e:
         traceback.print_exc()
@@ -687,6 +782,31 @@ def generate_final_model_run_report(model_run_id: str):
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     except RuntimeError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@app.post("/api/chat/copilot")
+def chat_with_clinical_copilot(payload: CopilotChatRequest):
+    """Interactive explainable AI clinical copilot for reviewing doctors."""
+    try:
+        model_run = load_model_run(payload.model_run_id)
+        serialized_messages = [
+            msg.model_dump() if hasattr(msg, "model_dump") else msg.dict()
+            for msg in payload.messages
+        ]
+        result = clinical_copilot_service.chat(
+            model_run=model_run,
+            messages=serialized_messages,
+        )
+        return {"success": True, "data": result}
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except ClinicalCopilotError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Clinical copilot failed: {str(exc)}") from exc
 
 
 # Serve built frontend static assets in production

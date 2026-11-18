@@ -1,9 +1,9 @@
-"""Local Gemma adapter for post-OCR diabetes feature extraction.
+"""Local Gemma adapter for post-OCR disease feature extraction.
 
-The adapter uses Ollama's local ``/api/generate`` contract.  It keeps Gemma
-behind one small boundary: another local Gemma runtime only needs to provide
-the same JSON response, or this file can be adapted without changing OCR/API
-routes or the diabetes feature contract.
+The adapter uses Ollama's local ``/api/generate`` contract. It keeps Gemma
+behind one small boundary: another local Gemma runtime only needs to provide the
+same JSON response, or this file can be adapted without changing OCR/API routes
+or the diabetes, heart, and breast feature contracts.
 """
 
 from __future__ import annotations
@@ -24,6 +24,7 @@ from backend.services.diabetes_feature_contract import (
     parse_gemma_diabetes_extraction,
 )
 from backend.services.breast_feature_contract import (
+    BREAST_FEATURE_ORDER,
     BreastFeatureContractError,
     breast_extraction_json_schema,
     breast_extraction_prompt,
@@ -115,39 +116,41 @@ class GemmaService:
     def extract_breast_cancer_features(self, ocr_text: str) -> dict[str, Any]:
         """Extract WDBC values from a pathology report, never an image.
 
-        Explicit OCR labels are used first. Gemma is only used to resolve
-        values that the deterministic extractor cannot safely read.
+        The complete OCR text is always sent to a configured Gemma model so it
+        can attempt every feature in the WDBC contract. Exact deterministic
+        label matches are authoritative evidence and take precedence over the
+        model for the same feature. There is no precomputed fallback.
         """
         if not ocr_text or not ocr_text.strip():
             raise GemmaServiceError("Cannot send empty OCR text to Gemma")
-        features = extract_breast_features_from_text(ocr_text)
-        missing = missing_breast_features(features)
-        if not missing:
-            return {
-                "status": "ready_for_inference",
-                "message": "All 30 WDBC FNA features were extracted from explicit OCR labels; doctor approval is still required.",
-                "features": serialise_breast_features(features),
-                "missing_or_unverified": [],
-                "model_features": build_breast_model_features(features),
-            }
+
+        deterministic = extract_breast_features_from_text(ocr_text)
+        missing = missing_breast_features(deterministic)
+
         if not self.configured:
             return {
-                "status": "needs_review",
-                "message": "Some WDBC values were not explicitly labelled in OCR text. Set GEMMA_MODEL to attempt structured extraction, or complete them manually.",
-                "features": serialise_breast_features(features),
+                "status": "not_configured",
+                "message": "Set GEMMA_MODEL to enable local Gemma extraction.",
+                "features": serialise_breast_features(deterministic),
                 "missing_or_unverified": missing,
                 "model_features": None,
             }
-        response_payload = self._generate_json(ocr_text, breast_extraction_prompt(), breast_extraction_json_schema())
+
+        response_payload = self._generate_json(
+            ocr_text, breast_extraction_prompt(), breast_extraction_json_schema()
+        )
         try:
             gemma_features = parse_breast_extraction(response_payload)
         except BreastFeatureContractError as exc:
             raise GemmaServiceError(f"Gemma returned an invalid breast-cancer extraction: {exc}") from exc
+
         # Deterministic OCR matches have exact evidence and therefore take
         # precedence over LLM extraction for the same feature.
         features = {
-            name: features[name] if features[name].status == "extracted" else gemma_features[name]
-            for name in features
+            name: deterministic[name]
+            if deterministic[name].status == "extracted"
+            else gemma_features[name]
+            for name in BREAST_FEATURE_ORDER
         }
         missing = missing_breast_features(features)
         return {

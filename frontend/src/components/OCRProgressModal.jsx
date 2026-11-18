@@ -12,6 +12,7 @@ import {
   Clock,
   ArrowRight,
   Cpu,
+  X,
 } from 'lucide-react';
 
 const STAGES = [
@@ -77,13 +78,32 @@ export default function OCRProgressModal({
     if (isOpen && stage !== 'complete' && !error) {
       setElapsed(0);
       timerRef.current = setInterval(() => {
-        setElapsed(prev => prev + 1);
+        setElapsed((prev) => prev + 1);
       }, 1000);
     } else {
       clearInterval(timerRef.current);
     }
     return () => clearInterval(timerRef.current);
   }, [isOpen, stage, error]);
+
+  // Lock body scroll while modal is active
+  useEffect(() => {
+    if (!isOpen) return undefined;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape' && (stage === 'complete' || error)) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose, stage, error]);
 
   if (!isOpen) return null;
 
@@ -93,35 +113,48 @@ export default function OCRProgressModal({
   const progressPercent = hasError
     ? 100
     : isComplete
-      ? 100
-      : Math.max(15, Math.min(95, ((currentIndex + 0.6) / STAGES.length) * 100));
+    ? 100
+    : Math.max(15, Math.min(95, ((currentIndex + 0.6) / STAGES.length) * 100));
 
-  const formatTime = seconds => {
+  const formatTime = (seconds) => {
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return `${mins > 0 ? `${mins}m ` : ''}${secs}s`;
   };
 
   const modalContent = (
-    <div className="pipeline-modal-backdrop" role="presentation" onClick={isComplete || hasError ? onClose : undefined}>
+    <div
+      className="pipeline-modal-backdrop"
+      role="presentation"
+      onClick={isComplete || hasError ? onClose : undefined}
+    >
       <section
         className="pipeline-modal"
         role="dialog"
         aria-modal="true"
         aria-labelledby="ocr-pipeline-title"
         aria-describedby="ocr-pipeline-desc"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         {/* Close Button */}
         {(isComplete || hasError) && (
-          <button className="pipeline-modal-close" type="button" onClick={onClose} aria-label="Close progress modal">
-            <XCircle size={18} />
+          <button
+            className="pipeline-modal-close"
+            type="button"
+            onClick={onClose}
+            aria-label="Close progress modal"
+          >
+            <X size={18} />
           </button>
         )}
 
         {/* Modal Header */}
         <header className="pipeline-modal-header">
-          <div className={`pipeline-modal-symbol ${hasError ? 'is-error' : isComplete ? 'is-complete' : 'is-active'}`}>
+          <div
+            className={`pipeline-modal-symbol ${
+              hasError ? 'is-error' : isComplete ? 'is-complete' : 'is-active'
+            }`}
+          >
             {hasError ? (
               <XCircle size={26} />
             ) : isComplete ? (
@@ -136,8 +169,8 @@ export default function OCRProgressModal({
                 {hasError
                   ? 'OCR Pipeline Error'
                   : isComplete
-                    ? 'Extraction Complete'
-                    : 'Processing Lab Report'}
+                  ? 'Extraction Complete'
+                  : 'Processing Lab Report'}
               </p>
               {!hasError && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -150,26 +183,29 @@ export default function OCRProgressModal({
               {hasError
                 ? 'Document Parsing Failed'
                 : isComplete
-                  ? 'Biomarkers & Evidence Extracted!'
-                  : stage === 'gemma_extraction'
-                    ? 'Gemma 3:4B Analyzing Clinical Values…'
-                    : 'Extracting Clinical Parameters…'}
+                ? 'Biomarkers & Evidence Extracted!'
+                : stage === 'gemma_extraction'
+                ? 'Gemma 3:4B Analyzing Clinical Values…'
+                : 'Extracting Clinical Parameters…'}
             </h2>
             <p id="ocr-pipeline-desc">
               {filename ? `Document: ${filename} • ` : ''}
               {hasError
                 ? 'Review error output below and retry.'
                 : isComplete
-                  ? 'All parameters extracted and validated against medical normal ranges.'
-                  : stage === 'gemma_extraction'
-                    ? 'Local Gemma model is performing deep semantic extraction and schema validation.'
-                    : 'Running optical scan and regex matching across laboratory biomarker panels.'}
+                ? 'All parameters extracted and validated against medical normal ranges.'
+                : stage === 'gemma_extraction'
+                ? 'Local Gemma model is performing deep semantic extraction and schema validation.'
+                : 'Running optical scan and regex matching across laboratory biomarker panels.'}
             </p>
           </div>
         </header>
 
         {/* Progress Bar Track */}
-        <div className="pipeline-progress-track" aria-label={`OCR progress ${Math.round(progressPercent)}%`}>
+        <div
+          className="pipeline-progress-track"
+          aria-label={`OCR progress ${Math.round(progressPercent)}%`}
+        >
           <span
             className={`pipeline-progress-fill ${!isComplete && !hasError ? 'is-animated' : ''}`}
             style={{
@@ -250,7 +286,7 @@ export default function OCRProgressModal({
           >
             <Sparkles size={16} color="#16a34a" className="flex-shrink-0 animate-pulse" />
             <span>
-              <strong>Local Gemma 3:4B Model Active:</strong> Deep structured extraction takes ~45–75 seconds on CPU. Please keep this tab open.
+              <strong>Local Gemma 3:4B Model Active:</strong> Deep structured extraction takes ~15–45 seconds on CPU. Please keep this tab open.
             </span>
           </div>
         )}

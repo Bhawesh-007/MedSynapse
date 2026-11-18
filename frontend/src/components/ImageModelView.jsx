@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Brain, CircleDot, Image as ImageIcon, RefreshCw, Upload } from 'lucide-react';
+import { CircleDot, Image as ImageIcon, RefreshCw, Upload } from 'lucide-react';
 import DiagnosticResultCard from './DiagnosticResultCard';
 import eyeFundusDemoA from '../assets/samples/eye-fundus-demo-a.jpg';
 import eyeFundusDemoB from '../assets/samples/eye-fundus-demo-b.jpg';
@@ -25,13 +25,6 @@ const MODEL_COPY = {
         source: eyeFundusDemoB,
       },
     ],
-  },
-  breast: {
-    title: 'Breast Cancer Analyzer',
-    icon: Brain,
-    description: 'Upload a mammogram or breast scan for the future breast-cancer model.',
-    endpointLabel: 'Breast image',
-    accept: 'image/*',
   },
 };
 

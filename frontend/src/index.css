@@ -281,17 +281,15 @@ body {
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: none; }
+  to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-fade-in {
   animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-/* ==========================================================================
-   Pipeline Progress Modal — Polished, Smooth & Crystal Clear
-   ========================================================================== */
-
+/* Pipeline Progress Dialog Styles (used by Diabetes and OCR/Feature Extraction modals).
+   Uses createPortal to mount directly on document.body to prevent containing block trap issues. */
 .pipeline-modal-backdrop {
   position: fixed;
   top: 0;
@@ -433,7 +431,7 @@ body {
   line-height: 1.3;
 }
 
-.pipeline-modal-header p#diabetes-pipeline-message {
+.pipeline-modal-header p {
   margin: 6px 0 0;
   color: #475569;
   font-size: 0.85rem;
@@ -649,16 +647,10 @@ body {
   background: #fffbeb;
 }
 
-.pipeline-step.is-current .pipeline-step-icon {
-  border-color: #f59e0b;
-  background: #f59e0b;
-  color: #ffffff;
-}
-
 .pipeline-step.is-error,
 .pipeline-step.is-rejected {
-  border-color: #fca5a5;
-  background: #fef2f2;
+  border-color: #fecaca;
+  background: #fff5f5;
 }
 
 .pipeline-step.is-error .pipeline-step-icon,
@@ -831,42 +823,6 @@ main .btn-accent * {
   -webkit-text-fill-color: #ffffff !important;
 }
 
-/* Dedicated Official Clinical Report Sheet (Screen styling) */
-.clinical-report-sheet {
-  background: #ffffff !important;
-  color: #0f172a !important;
-  border: 1.5px solid #cbd5e1 !important;
-  border-radius: 6px !important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04) !important;
-}
-
-.clinical-report-sheet :is(h1, h2, h3, h4, p, span, div, td, th, label, strong, li) {
-  color: #0f172a !important;
-  -webkit-text-fill-color: #0f172a !important;
-}
-
-.clinical-report-sheet table.print-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.clinical-report-sheet table.print-table th,
-.clinical-report-sheet table.print-table td {
-  border: 1px solid #e2e8f0;
-  padding: 6px 10px;
-  font-size: 0.8rem;
-  text-align: left;
-}
-
-.clinical-report-sheet table.print-table th {
-  background-color: #f1f5f9;
-  font-weight: 700;
-  text-transform: uppercase;
-  font-size: 0.75rem;
-  letter-spacing: 0.5px;
-  color: #0f172a;
-}
-
 /* ==========================================================================
    A4 CLINICAL MEDICAL REPORT & PRINT STYLES
    ========================================================================== */
@@ -880,8 +836,8 @@ main .btn-accent * {
   html, body {
     background: #ffffff !important;
     color: #0f172a !important;
-    font-size: 9.5pt !important;
-    line-height: 1.35 !important;
+    font-size: 10pt !important;
+    line-height: 1.4 !important;
     margin: 0 !important;
     padding: 0 !important;
     -webkit-print-color-adjust: exact !important;
@@ -921,9 +877,9 @@ main .btn-accent * {
     max-width: 100% !important;
     background: #ffffff !important;
     color: #0f172a !important;
-    border: 1.5px solid #0f172a !important;
-    border-radius: 4px !important;
-    padding: 10mm 12mm !important;
+    border: 1.5px solid #94a3b8 !important;
+    border-radius: 6px !important;
+    padding: 12mm 14mm !important;
     margin: 0 auto !important;
     box-shadow: none !important;
     page-break-after: avoid !important;
@@ -938,7 +894,7 @@ main .btn-accent * {
     display: flex !important;
     justify-content: space-between !important;
     align-items: flex-start !important;
-    border-bottom: 2px solid #0f172a !important;
+    border-bottom: 2px solid #0284c7 !important;
     padding-bottom: 8px !important;
     margin-bottom: 12px !important;
   }
@@ -946,14 +902,14 @@ main .btn-accent * {
   .print-table {
     width: 100% !important;
     border-collapse: collapse !important;
-    margin: 8px 0 !important;
+    margin: 10px 0 !important;
   }
 
   .print-table th, 
   .print-table td {
     border: 1px solid #cbd5e1 !important;
-    padding: 4px 8px !important;
-    font-size: 8.5pt !important;
+    padding: 5px 8px !important;
+    font-size: 9pt !important;
     text-align: left !important;
   }
 
@@ -962,18 +918,33 @@ main .btn-accent * {
     color: #0f172a !important;
     font-weight: 700 !important;
     text-transform: uppercase !important;
-    font-size: 7.5pt !important;
+    font-size: 8pt !important;
     letter-spacing: 0.5px !important;
   }
 
   .print-status-box {
-    border: 1.5px solid #0f172a !important;
+    border: 1.5px solid #cbd5e1 !important;
     background-color: #f8fafc !important;
-    padding: 8px 12px !important;
-    border-radius: 4px !important;
+    padding: 10px 14px !important;
+    border-radius: 6px !important;
     margin: 10px 0 !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
+  }
+
+  .print-status-box.danger {
+    border-color: #f43f5e !important;
+    background-color: #fff1f2 !important;
+  }
+
+  .print-status-box.success {
+    border-color: #10b981 !important;
+    background-color: #f0fdf4 !important;
+  }
+
+  .print-status-box.warning {
+    border-color: #f59e0b !important;
+    background-color: #fffbeb !important;
   }
 
   .print-grid-2 {
@@ -992,10 +963,10 @@ main .btn-accent * {
     display: flex !important;
     justify-content: space-between !important;
     align-items: flex-end !important;
-    margin-top: 16px !important;
-    padding-top: 8px !important;
-    border-top: 1px solid #cbd5e1 !important;
-    font-size: 8pt !important;
+    margin-top: 18px !important;
+    padding-top: 10px !important;
+    border-top: 1px dashed #cbd5e1 !important;
+    font-size: 8.5pt !important;
     page-break-inside: avoid !important;
     break-inside: avoid !important;
   }
