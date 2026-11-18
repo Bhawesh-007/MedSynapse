@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import { Activity, Droplet, Sparkles, RefreshCw, FileText, CheckCircle2, AlertCircle } from 'lucide-react';
 import { predictLiverDisease } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
+import ClinicalPipelineProgressModal from './ClinicalPipelineProgressModal';
+import useClinicalPipelineProgress from '../hooks/useClinicalPipelineProgress';
 
 const LIVER_PRESETS = [
   {
@@ -91,6 +93,7 @@ export default function LiverDiseaseView({ setTab, initialData }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const pipelineProgress = useClinicalPipelineProgress();
 
   const handleChange = (field, value) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -100,12 +103,15 @@ export default function LiverDiseaseView({ setTab, initialData }) {
     setFormData(preset.values);
     setError(null);
     setResult(null);
+    pipelineProgress.reset();
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
     setError(null);
+    setResult(null);
+    pipelineProgress.start();
     try {
       const payload = {
         ...formData,
@@ -121,8 +127,11 @@ export default function LiverDiseaseView({ setTab, initialData }) {
       };
       const res = await predictLiverDisease(payload);
       setResult(res);
+      pipelineProgress.transition('awaiting_review');
     } catch (err) {
-      setError(err.message || 'Liver screening evaluation failed');
+      const message = err.message || 'Liver screening evaluation failed';
+      setError(message);
+      pipelineProgress.fail(message, 'prediction');
     } finally {
       setLoading(false);
     }
@@ -130,12 +139,20 @@ export default function LiverDiseaseView({ setTab, initialData }) {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      
+      <ClinicalPipelineProgressModal
+        isOpen={pipelineProgress.isOpen}
+        stage={pipelineProgress.stage}
+        error={pipelineProgress.error}
+        failedAt={pipelineProgress.failedAt}
+        onClose={pipelineProgress.close}
+        diseaseTitle="Liver Disease (ILPD)"
+        modality="tabular"
+      />
       {/* Header Banner */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
           <span className="badge badge-warning" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-            <Activity size={13} /> Module M6 • Hepatology
+            <Activity size={13} /> Hepatology
           </span>
           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
             ILPD Random Forest & GBDT Ensemble • 79.49% Benchmark Accuracy
@@ -350,7 +367,11 @@ export default function LiverDiseaseView({ setTab, initialData }) {
         <DiagnosticResultCard 
           result={result} 
           title="Hepatic Function & ILPD Risk Assessment"
-          onReset={() => setResult(null)}
+          onWorkflowStageChange={pipelineProgress.handleWorkflowStageChange}
+          onReset={() => {
+            setResult(null);
+            pipelineProgress.reset();
+          }}
         />
       )}
 

@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import { Brain, Upload, RefreshCw, FileText, CheckCircle2, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react';
 import { predictBrainTumor } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
+import ClinicalPipelineProgressModal from './ClinicalPipelineProgressModal';
+import useClinicalPipelineProgress from '../hooks/useClinicalPipelineProgress';
 
 const DEMO_CASES = [
   {
@@ -42,6 +44,7 @@ export default function BrainTumorView({ setTab }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const pipelineProgress = useClinicalPipelineProgress();
 
   const handleFileChange = (e) => {
     const selected = e.target.files?.[0];
@@ -51,6 +54,7 @@ export default function BrainTumorView({ setTab }) {
     setSelectedDemo(null);
     setResult(null);
     setError(null);
+    pipelineProgress.reset();
   };
 
   const handleSelectDemo = (demo) => {
@@ -111,6 +115,8 @@ export default function BrainTumorView({ setTab }) {
     }
     setLoading(true);
     setError(null);
+    setResult(null);
+    pipelineProgress.start();
     try {
       const res = await predictBrainTumor(file);
       if (selectedDemo) {
@@ -128,8 +134,11 @@ export default function BrainTumorView({ setTab }) {
         }
       }
       setResult(res);
+      pipelineProgress.transition('awaiting_review');
     } catch (err) {
-      setError(err.message || 'Brain tumor analysis failed');
+      const message = err.message || 'Brain tumor analysis failed';
+      setError(message);
+      pipelineProgress.fail(message, 'prediction');
     } finally {
       setLoading(false);
     }
@@ -137,11 +146,19 @@ export default function BrainTumorView({ setTab }) {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      
+      <ClinicalPipelineProgressModal
+        isOpen={pipelineProgress.isOpen}
+        stage={pipelineProgress.stage}
+        error={pipelineProgress.error}
+        failedAt={pipelineProgress.failedAt}
+        onClose={pipelineProgress.close}
+        diseaseTitle="Cranial Brain Tumor"
+        modality="imaging"
+      />
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
           <span className="badge badge-purple" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-            <Brain size={13} /> Module M4 • Neuro-Oncology
+            <Brain size={13} /> Neuro-Oncology
           </span>
           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
             Xception Deep CNN • 95.25% Test Accuracy
@@ -295,7 +312,14 @@ export default function BrainTumorView({ setTab }) {
         <DiagnosticResultCard 
           result={result} 
           title="Cranial MRI Brain Tumor Assessment"
-          onReset={() => { setResult(null); setFile(null); setPreview(null); setSelectedDemo(null); }}
+          onWorkflowStageChange={pipelineProgress.handleWorkflowStageChange}
+          onReset={() => {
+            setResult(null);
+            setFile(null);
+            setPreview(null);
+            setSelectedDemo(null);
+            pipelineProgress.reset();
+          }}
         />
       )}
 

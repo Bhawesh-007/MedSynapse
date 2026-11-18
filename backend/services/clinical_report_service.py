@@ -138,6 +138,56 @@ class ClinicalReportService:
             model = self.model_service.get_eye_model()
             tensor, _ = self.model_service.transform_image(image_bytes, target_size=(224, 224))
             return ExplainabilityService.grad_cam(model=model, image_tensor=tensor, target_positive=bool(prediction.get("is_positive")), report_id=report_id, storage_dir=self.explanations_dir, positive_label="Eye disease detected", negative_label="No eye disease detected")
+        if disease_key == "liver":
+            model, scaler = self.model_service.get_liver_model()
+            names = ["Age", "Gender", "Total_Bilirubin", "Direct_Bilirubin", "Alkaline_Phosphotase", "Alamine_Aminotransferase", "Aspartate_Aminotransferase", "Total_Protiens", "Albumin", "Albumin_and_Globulin_Ratio"]
+            raw_gender = inputs.get("gender", inputs.get("Gender", 1))
+            gender_val = 1.0 if str(raw_gender).strip().lower() in {'1', 'male', 'm'} else 0.0
+            raw = {
+                "Age": float(inputs.get("age", inputs.get("Age", 45))),
+                "Gender": gender_val,
+                "Total_Bilirubin": float(inputs.get("total_bilirubin", inputs.get("Total_Bilirubin", 1.0))),
+                "Direct_Bilirubin": float(inputs.get("direct_bilirubin", inputs.get("Direct_Bilirubin", 0.4))),
+                "Alkaline_Phosphotase": float(inputs.get("alkaline_phosphotase", inputs.get("Alkaline_Phosphotase", 190))),
+                "Alamine_Aminotransferase": float(inputs.get("alamine_aminotransferase", inputs.get("Alamine_Aminotransferase", 35))),
+                "Aspartate_Aminotransferase": float(inputs.get("aspartate_aminotransferase", inputs.get("Aspartate_Aminotransferase", 40))),
+                "Total_Protiens": float(inputs.get("total_protiens", inputs.get("Total_Protiens", 6.8))),
+                "Albumin": float(inputs.get("albumin", inputs.get("Albumin", 3.4))),
+                "Albumin_and_Globulin_Ratio": float(inputs.get("ag_ratio", inputs.get("albumin_and_globulin_ratio", inputs.get("Albumin_and_Globulin_Ratio", 1.0)))),
+            }
+            values = np.array([[float(raw[name]) for name in names]])
+            return ExplainabilityService.permutation_shap(
+                predict_proba=model.predict_proba, model_input=scaler.transform(values),
+                background_path=self.background_dir / "liver_background_scaled_10.npy",
+                feature_names=names, raw_values=raw, method_label="SHAP PermutationExplainer (ILPD Liver Random Forest)",
+            )
+        if disease_key == "kidney_stone" and image_bytes:
+            model = self.model_service.get_kidney_stone_model()
+            tensor, _ = self.model_service.transform_image(image_bytes, target_size=(150, 150))
+            return ExplainabilityService.grad_cam(
+                model=model, image_tensor=tensor,
+                target_positive=bool(prediction.get("has_disease", prediction.get("is_positive", True))),
+                report_id=report_id, storage_dir=self.explanations_dir,
+                positive_label=str(prediction.get("diagnosis", "Renal Calculus / Pathology")),
+                negative_label="Normal Renal Parenchyma"
+            )
+        if disease_key == "skin_cancer" and image_bytes:
+            model = self.model_service.get_skin_cancer_model()
+            tensor, _ = self.model_service.transform_image(image_bytes, target_size=(28, 28))
+            return ExplainabilityService.grad_cam(
+                model=model, image_tensor=tensor,
+                target_positive=bool(prediction.get("has_disease", prediction.get("is_positive", True))),
+                report_id=report_id, storage_dir=self.explanations_dir,
+                positive_label=str(prediction.get("diagnosis", "Malignant Skin Lesion")),
+                negative_label="Benign Lesion"
+            )
+        if disease_key == "brain_tumor" and image_bytes:
+            tensor, _ = self.model_service.transform_image(image_bytes, target_size=(224, 224))
+            return ExplainabilityService.attention_saliency(
+                image_tensor=tensor,
+                report_id=report_id, storage_dir=self.explanations_dir,
+                target_class=str(prediction.get("diagnosis", prediction.get("prediction", "Cranial Lesion")))
+            )
         return {"status": "not_applicable", "method": None, "limitations": ["No explanation adapter is configured for this model."]}
 
     @staticmethod
@@ -198,7 +248,17 @@ class ClinicalReportService:
 
     @staticmethod
     def _model_name(disease_key: str) -> str:
-        return {"diabetes": "diabetes_model.pkl", "heart": "heart_model.pkl", "pneumonia": "xrays_pneumonia.keras", "breast": "breast_cancer_model.pkl", "eye": "eye_disease.keras"}.get(disease_key, disease_key)
+        return {
+            "diabetes": "diabetes_model.pkl",
+            "heart": "heart_model.pkl",
+            "pneumonia": "xrays_pneumonia.keras",
+            "breast": "breast_cancer_model.pkl",
+            "eye": "eye_disease.keras",
+            "liver": "liver_model.pkl",
+            "kidney_stone": "kidney_stone_efficientnet_model.keras",
+            "skin_cancer": "skin_cancer_model.keras",
+            "brain_tumor": "cranial_mri_analyzer",
+        }.get(disease_key, disease_key)
 
     @staticmethod
     def _explanation_sentences(explanation: dict[str, Any]) -> list[str]:

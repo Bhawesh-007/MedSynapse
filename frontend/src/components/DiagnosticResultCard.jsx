@@ -18,6 +18,7 @@ import {
   Ban
 } from 'lucide-react';
 import { generateFinalReport, reviewModelRun } from '../services/api';
+import ClinicalCopilotPanel from './ClinicalCopilotPanel';
 
 export default function DiagnosticResultCard({ 
   result: resultProp,
@@ -706,6 +707,20 @@ export default function DiagnosticResultCard({
             </span>
           </div>
         </div>
+      )}
+
+      {/* =========================================================================
+          6B. EXPLAINABLE AI (XAI) & CLINICAL COPILOT
+          ========================================================================= */}
+      {modelRunId && (
+        <ClinicalCopilotPanel
+          modelRunId={modelRunId}
+          result={result}
+          diseaseType={result?.disease || title}
+          onApplyReviewNote={(note) => {
+            setReviewComment((prev) => (prev ? `${prev}\n\n${note}` : note));
+          }}
+        />
       )}
 
       {/* =========================================================================

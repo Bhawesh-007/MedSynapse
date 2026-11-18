@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import { Activity, Upload, RefreshCw, FileText, CheckCircle2, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react';
 import { predictKidneyStone } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
+import ClinicalPipelineProgressModal from './ClinicalPipelineProgressModal';
+import useClinicalPipelineProgress from '../hooks/useClinicalPipelineProgress';
 
 const KIDNEY_DEMOS = [
   {
@@ -42,6 +44,7 @@ export default function KidneyStoneView({ setTab }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const pipelineProgress = useClinicalPipelineProgress();
 
   const handleFileChange = (e) => {
     const selected = e.target.files?.[0];
@@ -51,12 +54,14 @@ export default function KidneyStoneView({ setTab }) {
     setSelectedDemo(null);
     setResult(null);
     setError(null);
+    pipelineProgress.reset();
   };
 
   const handleSelectDemo = (demo) => {
     setSelectedDemo(demo);
     setError(null);
     setResult(null);
+    pipelineProgress.reset();
 
     const canvas = document.createElement('canvas');
     canvas.width = 150;
@@ -109,6 +114,8 @@ export default function KidneyStoneView({ setTab }) {
     }
     setLoading(true);
     setError(null);
+    setResult(null);
+    pipelineProgress.start();
     try {
       const res = await predictKidneyStone(file);
       if (selectedDemo) {
@@ -127,8 +134,11 @@ export default function KidneyStoneView({ setTab }) {
         }
       }
       setResult(res);
+      pipelineProgress.transition('awaiting_review');
     } catch (err) {
-      setError(err.message || 'Renal CT analysis failed');
+      const message = err.message || 'Renal CT analysis failed';
+      setError(message);
+      pipelineProgress.fail(message, 'prediction');
     } finally {
       setLoading(false);
     }
@@ -136,12 +146,20 @@ export default function KidneyStoneView({ setTab }) {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      
+      <ClinicalPipelineProgressModal
+        isOpen={pipelineProgress.isOpen}
+        stage={pipelineProgress.stage}
+        error={pipelineProgress.error}
+        failedAt={pipelineProgress.failedAt}
+        onClose={pipelineProgress.close}
+        diseaseTitle="Kidney Pathology & Calculi"
+        modality="imaging"
+      />
       {/* Header Banner */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
           <span className="badge badge-cyan" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-            <Activity size={13} /> Module M7 • Nephrology & Urology
+            <Activity size={13} /> Nephrology & Urology
           </span>
           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
             U-Net CT Backbone • 99.25% Benchmark Accuracy
@@ -296,7 +314,14 @@ export default function KidneyStoneView({ setTab }) {
         <DiagnosticResultCard 
           result={result} 
           title="Renal CT Pathology & Stone Assessment"
-          onReset={() => { setResult(null); setFile(null); setPreview(null); setSelectedDemo(null); }}
+          onWorkflowStageChange={pipelineProgress.handleWorkflowStageChange}
+          onReset={() => {
+            setResult(null);
+            setFile(null);
+            setPreview(null);
+            setSelectedDemo(null);
+            pipelineProgress.reset();
+          }}
         />
       )}
 

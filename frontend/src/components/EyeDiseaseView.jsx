@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import { Eye, Upload, RefreshCw, FileText, CheckCircle2, ShieldCheck, AlertCircle, Sparkles } from 'lucide-react';
 import { predictEye } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
+import ClinicalPipelineProgressModal from './ClinicalPipelineProgressModal';
+import useClinicalPipelineProgress from '../hooks/useClinicalPipelineProgress';
 
 const EYE_DEMOS = [
   {
@@ -42,6 +44,7 @@ export default function EyeDiseaseView({ setTab }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const pipelineProgress = useClinicalPipelineProgress();
 
   const handleFileChange = (e) => {
     const selected = e.target.files?.[0];
@@ -51,12 +54,14 @@ export default function EyeDiseaseView({ setTab }) {
     setSelectedDemo(null);
     setResult(null);
     setError(null);
+    pipelineProgress.reset();
   };
 
   const handleSelectDemo = (demo) => {
     setSelectedDemo(demo);
     setError(null);
     setResult(null);
+    pipelineProgress.reset();
 
     const canvas = document.createElement('canvas');
     canvas.width = 224;
@@ -125,6 +130,8 @@ export default function EyeDiseaseView({ setTab }) {
     }
     setLoading(true);
     setError(null);
+    setResult(null);
+    pipelineProgress.start();
     try {
       const res = await predictEye(file);
       if (selectedDemo) {
@@ -143,8 +150,11 @@ export default function EyeDiseaseView({ setTab }) {
         }
       }
       setResult(res);
+      pipelineProgress.transition('awaiting_review');
     } catch (err) {
-      setError(err.message || 'Retinal fundus analysis failed');
+      const message = err.message || 'Retinal fundus analysis failed';
+      setError(message);
+      pipelineProgress.fail(message, 'prediction');
     } finally {
       setLoading(false);
     }
@@ -152,12 +162,20 @@ export default function EyeDiseaseView({ setTab }) {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      
+      <ClinicalPipelineProgressModal
+        isOpen={pipelineProgress.isOpen}
+        stage={pipelineProgress.stage}
+        error={pipelineProgress.error}
+        failedAt={pipelineProgress.failedAt}
+        onClose={pipelineProgress.close}
+        diseaseTitle="Retinal Eye Diseases"
+        modality="imaging"
+      />
       {/* Header Banner */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
           <span className="badge badge-purple" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-            <Eye size={13} /> Module M9 • Ophthalmology
+            <Eye size={13} /> Ophthalmology
           </span>
           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
             PyTorch ResNet-18 Transfer Learning • 90.78% Benchmark Accuracy
@@ -312,7 +330,14 @@ export default function EyeDiseaseView({ setTab }) {
         <DiagnosticResultCard 
           result={result} 
           title="Ophthalmic Retinal Fundus Assessment"
-          onReset={() => { setResult(null); setFile(null); setPreview(null); setSelectedDemo(null); }}
+          onWorkflowStageChange={pipelineProgress.handleWorkflowStageChange}
+          onReset={() => {
+            setResult(null);
+            setFile(null);
+            setPreview(null);
+            setSelectedDemo(null);
+            pipelineProgress.reset();
+          }}
         />
       )}
 

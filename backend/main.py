@@ -10,7 +10,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-from typing import Optional, Dict, Any, Literal, List
+from typing import Optional, Dict, Any, Literal, List, Union
 
 # Ensure project root in sys.path
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -201,6 +201,19 @@ class BreastCancerInput(BaseModel):
     features: Dict[str, float]
 
 
+class LiverInput(BaseModel):
+    age: float = 45.0
+    gender: Union[int, str] = 1
+    total_bilirubin: float = 1.0
+    direct_bilirubin: float = 0.4
+    alkaline_phosphotase: float = 190.0
+    alamine_aminotransferase: float = 35.0
+    aspartate_aminotransferase: float = 40.0
+    total_protiens: float = 6.8
+    albumin: float = 3.4
+    ag_ratio: Optional[float] = 1.0
+
+
 class ReportNarrativeInput(BaseModel):
     report: Dict[str, Any]
 
@@ -273,6 +286,10 @@ def health_check():
         "xray_pneumonia_model": os.path.exists(os.path.join(BASE_DIR, "models", "xrays_pneumonia.keras")),
         "eye_disease_model": os.path.exists(os.path.join(BASE_DIR, "models", "eye_disease.keras")),
         "breast_cancer_model": os.path.exists(os.path.join(BASE_DIR, "models", "breast_cancer_model.pkl")),
+        "liver_model": os.path.exists(os.path.join(BASE_DIR, "models", "liver_model.pkl")),
+        "kidney_stone_model": os.path.exists(os.path.join(BASE_DIR, "models", "kidney_stone_efficientnet_model.keras")),
+        "skin_cancer_model": os.path.exists(os.path.join(BASE_DIR, "models", "skin_cancer_model.keras")),
+        "brain_tumor_model": True,
     }
     return {
         "status": "online",
@@ -718,6 +735,85 @@ def predict_breast_cancer_from_feature_store(feature_extraction_id: str):
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.post("/api/predict/liver")
+def predict_liver_route(payload: LiverInput):
+    try:
+        inputs = payload.model_dump()
+        result = model_service.predict_liver(inputs)
+        return create_model_run_response(
+            disease_key="liver", result=result, inputs=inputs
+        )
+    except Exception as e:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Liver disease prediction failed: {str(e)}")
+
+
+@app.post("/api/predict/kidney-stone")
+async def predict_kidney_stone_route(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded CT image is empty.")
+        result = model_service.predict_kidney_stone(contents)
+        return create_model_run_response(
+            disease_key="kidney_stone",
+            result=result,
+            inputs={"source_filename": file.filename or ""},
+            image_bytes=contents,
+        )
+    except HTTPException:
+        raise
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Kidney scan analysis failed: {str(exc)}") from exc
+
+
+@app.post("/api/predict/skin-cancer")
+async def predict_skin_cancer_route(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded dermoscopy image is empty.")
+        result = model_service.predict_skin_cancer(contents)
+        return create_model_run_response(
+            disease_key="skin_cancer",
+            result=result,
+            inputs={"source_filename": file.filename or ""},
+            image_bytes=contents,
+        )
+    except HTTPException:
+        raise
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Skin cancer analysis failed: {str(exc)}") from exc
+
+
+@app.post("/api/predict/brain-tumor")
+async def predict_brain_tumor_route(file: UploadFile = File(...)):
+    try:
+        contents = await file.read()
+        if len(contents) == 0:
+            raise HTTPException(status_code=400, detail="Uploaded brain MRI scan is empty.")
+        result = model_service.predict_brain_tumor(contents)
+        return create_model_run_response(
+            disease_key="brain_tumor",
+            result=result,
+            inputs={"source_filename": file.filename or ""},
+            image_bytes=contents,
+        )
+    except HTTPException:
+        raise
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    except Exception as exc:
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Brain MRI analysis failed: {str(exc)}") from exc
 
 
 @app.post("/api/reports/generate-narrative")

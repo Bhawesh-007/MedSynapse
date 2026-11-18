@@ -2,8 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { FileText, Ribbon, Sparkles } from 'lucide-react';
 import { predictBreastCancer } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
-import DiabetesPipelineProgressModal from './DiabetesPipelineProgressModal';
-import useDiabetesPipelineProgress from '../hooks/useDiabetesPipelineProgress';
+import ClinicalPipelineProgressModal from './ClinicalPipelineProgressModal';
+import useClinicalPipelineProgress from '../hooks/useClinicalPipelineProgress';
 
 const BASE = ['radius', 'texture', 'perimeter', 'area', 'smoothness', 'compactness', 'concavity', 'concave_points', 'symmetry', 'fractal_dimension'];
 const FEATURES = ['mean', 'se', 'worst'].flatMap(metric => BASE.map(name => `${name}_${metric}`));
@@ -32,7 +32,7 @@ export default function BreastCancerView({ setTab, initialData }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
-  const pipelineProgress = useDiabetesPipelineProgress();
+  const pipelineProgress = useClinicalPipelineProgress();
 
   useEffect(() => {
     if (initialData) setFeatures(Object.fromEntries(FEATURES.map(name => [name, initialData[name] ?? ''])));
@@ -42,6 +42,7 @@ export default function BreastCancerView({ setTab, initialData }) {
     setFeatures(Object.fromEntries(FEATURES.map(name => [name, presetData[name] ?? ''])));
     setError(null);
     setResult(null);
+    pipelineProgress.reset();
   };
 
   const submit = async event => {
@@ -63,15 +64,17 @@ export default function BreastCancerView({ setTab, initialData }) {
   };
 
   return <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-    <DiabetesPipelineProgressModal
+    <ClinicalPipelineProgressModal
       isOpen={pipelineProgress.isOpen}
       stage={pipelineProgress.stage}
       error={pipelineProgress.error}
       failedAt={pipelineProgress.failedAt}
       onClose={pipelineProgress.close}
+      diseaseTitle="Breast Cancer (WDBC FNA)"
+      modality="tabular"
     />
     <div>
-      <span className="badge badge-purple"><Ribbon size={13} /> Module M5 • Oncology</span>
+      <span className="badge badge-purple"><Ribbon size={13} /> Oncology</span>
       <h1 style={{ fontSize: '2rem', fontWeight: 800, marginTop: '6px' }}>Breast Cancer FNA Morphology Analyzer</h1>
       <p style={{ color: 'var(--text-secondary)', marginTop: '4px' }}>PCA + Logistic Regression ensemble (96.49% Test Accuracy) evaluating 30 fine-needle aspirate (FNA) cell nuclei features.</p>
       

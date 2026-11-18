@@ -1,0 +1,5 @@
+{
+  "dataset": "ILPD reference cohort (scaled)",
+  "feature_count": 10,
+  "description": "Representative clinical reference samples for exact Shapley feature attribution."
+}

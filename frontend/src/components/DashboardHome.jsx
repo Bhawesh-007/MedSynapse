@@ -20,7 +20,6 @@ export default function DashboardHome({ setTab }) {
   const modules = [
     {
       id: 'diabetes',
-      code: 'M1',
       title: 'Diabetes Mellitus',
       category: 'Metabolic & Endocrinology',
       desc: 'Predict diabetic risk and glycemic irregularities using Voting Classifier ensemble with BMI stratification.',
@@ -33,7 +32,6 @@ export default function DashboardHome({ setTab }) {
     },
     {
       id: 'heart',
-      code: 'M2',
       title: 'Coronary Heart Disease',
       category: 'Cardiology & Vascular',
       desc: 'Assess coronary arterial risk using 13 clinical biomarkers, exercise ECG metrics, and lipid profiles.',
@@ -46,7 +44,6 @@ export default function DashboardHome({ setTab }) {
     },
     {
       id: 'xray',
-      code: 'M3',
       title: 'Pneumonia (Chest X-Ray)',
       category: 'Pulmonology & Radiology',
       desc: 'Deep Convolutional Neural Network for rapid detection of acute bacterial and viral pneumonia infiltrates.',
@@ -59,7 +56,6 @@ export default function DashboardHome({ setTab }) {
     },
     {
       id: 'brain-tumor',
-      code: 'M4',
       title: 'Brain Tumor (Cranial MRI)',
       category: 'Neuro-Oncology',
       desc: '4-class intracranial neoplasm classifier distinguishing Glioma, Meningioma, Pituitary Adenoma, and Healthy Brain.',
@@ -72,7 +68,6 @@ export default function DashboardHome({ setTab }) {
     },
     {
       id: 'breast',
-      code: 'M5',
       title: 'Breast Cancer (FNA)',
       category: 'Oncology & Cytopathology',
       desc: 'Evaluates 30 fine-needle aspirate (FNA) morphology measurements for benign vs malignant breast lesion triage.',
@@ -85,7 +80,6 @@ export default function DashboardHome({ setTab }) {
     },
     {
       id: 'liver',
-      code: 'M6',
       title: 'Liver Disease (ILPD)',
       category: 'Hepatology & Gastroenterology',
       desc: 'Multi-analyte LFT panel evaluating transaminases (ALT/AST), alkaline phosphatase, and protein ratios.',
@@ -98,7 +92,6 @@ export default function DashboardHome({ setTab }) {
     },
     {
       id: 'kidney-stone',
-      code: 'M7',
       title: 'Kidney Pathology & Calculi',
       category: 'Nephrology & Urology',
       desc: 'Automated 4-class CT scan screening for Nephrolithiasis (Stones), Renal Cysts, Tumors, and Healthy Parenchyma.',
@@ -111,7 +104,6 @@ export default function DashboardHome({ setTab }) {
     },
     {
       id: 'skin-cancer',
-      code: 'M8',
       title: 'Skin Cancer (HAM10000)',
       category: 'Dermatology & Oncology',
       desc: '7-class dermatoscopic lesion classifier distinguishing Melanoma, Basal Cell Carcinoma, and benign nevi.',
@@ -124,7 +116,6 @@ export default function DashboardHome({ setTab }) {
     },
     {
       id: 'eye',
-      code: 'M9',
       title: 'Eye Diseases (Retinal Fundus)',
       category: 'Ophthalmology & Retina',
       desc: 'Multi-class color fundus screening for Diabetic Retinopathy, Glaucoma Optic Neuropathy, and Cataracts.',

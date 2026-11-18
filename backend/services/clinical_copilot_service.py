@@ -34,13 +34,13 @@ class ClinicalCopilotService:
         timeout_seconds: float | None = None,
     ) -> None:
         self.api_url = (
-            api_url or os.getenv("LLM_API_URL") or GROQ_CHAT_COMPLETIONS_URL
+            api_url if api_url is not None else (os.getenv("LLM_API_URL") or GROQ_CHAT_COMPLETIONS_URL)
         ).strip()
         self.api_key = (
-            api_key or os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY") or ""
+            api_key if api_key is not None else (os.getenv("LLM_API_KEY") or os.getenv("GROQ_API_KEY") or "")
         ).strip()
         self.model = (
-            model or os.getenv("LLM_MODEL") or DEFAULT_GROQ_MODEL
+            model if model is not None else (os.getenv("LLM_MODEL") or DEFAULT_GROQ_MODEL)
         ).strip()
         configured_timeout = timeout_seconds or os.getenv("LLM_TIMEOUT_SECONDS") or 30
         try:

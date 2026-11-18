@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Heart, Sparkles, AlertCircle, FileText, Play, RefreshCw, Activity } from 'lucide-react';
 import { predictHeart } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
+import ClinicalPipelineProgressModal from './ClinicalPipelineProgressModal';
+import useClinicalPipelineProgress from '../hooks/useClinicalPipelineProgress';
 
 export default function HeartView({ initialData, setTab }) {
   const [formData, setFormData] = useState({
@@ -23,6 +25,7 @@ export default function HeartView({ initialData, setTab }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const pipelineProgress = useClinicalPipelineProgress();
 
   useEffect(() => {
     if (initialData) {
@@ -36,17 +39,25 @@ export default function HeartView({ initialData, setTab }) {
 
   const handleApplyPreset = (preset) => {
     setFormData(preset);
+    setError(null);
+    setResult(null);
+    pipelineProgress.reset();
   };
 
   const handlePredict = async (e) => {
     if (e) e.preventDefault();
     setLoading(true);
     setError(null);
+    setResult(null);
+    pipelineProgress.start();
     try {
       const res = await predictHeart(formData);
       setResult(res);
+      pipelineProgress.transition('awaiting_review');
     } catch (err) {
-      setError(err.message || 'Heart disease prediction failed');
+      const message = err.message || 'Heart disease prediction failed';
+      setError(message);
+      pipelineProgress.fail(message, 'prediction');
     } finally {
       setLoading(false);
     }
@@ -54,6 +65,15 @@ export default function HeartView({ initialData, setTab }) {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <ClinicalPipelineProgressModal
+        isOpen={pipelineProgress.isOpen}
+        stage={pipelineProgress.stage}
+        error={pipelineProgress.error}
+        failedAt={pipelineProgress.failedAt}
+        onClose={pipelineProgress.close}
+        diseaseTitle="Coronary Heart Disease"
+        modality="tabular"
+      />
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -90,7 +110,15 @@ export default function HeartView({ initialData, setTab }) {
           className="btn-secondary"
           style={{ padding: '6px 12px', fontSize: '0.8rem' }}
         >
-          🟢 Healthy Cardiovascular Baseline
+          🟢 Healthy Baseline
+        </button>
+        <button
+          type="button"
+          onClick={() => handleApplyPreset({ age: 48, sex: 1, cp: 2, trestbps: 130, chol: 225, fbs: 0, restecg: 1, thalach: 145, exang: 0, oldpeak: 1.0, slope: 1, ca: 1, thal: 2 })}
+          className="btn-secondary"
+          style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+        >
+          🟡 Intermediate / Borderline
         </button>
         <button
           type="button"
@@ -365,7 +393,11 @@ export default function HeartView({ initialData, setTab }) {
         <DiagnosticResultCard
           result={result}
           title="Coronary Cardiovascular Risk Report"
-          onReset={() => setResult(null)}
+          onWorkflowStageChange={pipelineProgress.handleWorkflowStageChange}
+          onReset={() => {
+            setResult(null);
+            pipelineProgress.reset();
+          }}
         />
       )}
     </div>

@@ -2,6 +2,8 @@ import React, { useRef, useState } from 'react';
 import { Eye, Upload, RefreshCw, FileText, CheckCircle2, ShieldCheck, AlertCircle, Sparkles, AlertTriangle } from 'lucide-react';
 import { predictSkinCancer } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
+import ClinicalPipelineProgressModal from './ClinicalPipelineProgressModal';
+import useClinicalPipelineProgress from '../hooks/useClinicalPipelineProgress';
 
 const SKIN_DEMOS = [
   {
@@ -50,6 +52,7 @@ export default function SkinCancerView({ setTab }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
+  const pipelineProgress = useClinicalPipelineProgress();
 
   const handleFileChange = (e) => {
     const selected = e.target.files?.[0];
@@ -59,12 +62,14 @@ export default function SkinCancerView({ setTab }) {
     setSelectedDemo(null);
     setResult(null);
     setError(null);
+    pipelineProgress.reset();
   };
 
   const handleSelectDemo = (demo) => {
     setSelectedDemo(demo);
     setError(null);
     setResult(null);
+    pipelineProgress.reset();
 
     const canvas = document.createElement('canvas');
     canvas.width = 120;
@@ -120,6 +125,8 @@ export default function SkinCancerView({ setTab }) {
     }
     setLoading(true);
     setError(null);
+    setResult(null);
+    pipelineProgress.start();
     try {
       const res = await predictSkinCancer(file);
       if (selectedDemo) {
@@ -137,8 +144,11 @@ export default function SkinCancerView({ setTab }) {
         }
       }
       setResult(res);
+      pipelineProgress.transition('awaiting_review');
     } catch (err) {
-      setError(err.message || 'Dermoscopic lesion evaluation failed');
+      const message = err.message || 'Dermoscopic lesion evaluation failed';
+      setError(message);
+      pipelineProgress.fail(message, 'prediction');
     } finally {
       setLoading(false);
     }
@@ -146,12 +156,20 @@ export default function SkinCancerView({ setTab }) {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.5rem' }}>
-      
+      <ClinicalPipelineProgressModal
+        isOpen={pipelineProgress.isOpen}
+        stage={pipelineProgress.stage}
+        error={pipelineProgress.error}
+        failedAt={pipelineProgress.failedAt}
+        onClose={pipelineProgress.close}
+        diseaseTitle="Skin Cancer (HAM10000)"
+        modality="imaging"
+      />
       {/* Header Banner */}
       <div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
           <span className="badge badge-danger" style={{ display: 'inline-flex', alignItems: 'center', gap: '5px' }}>
-            <AlertTriangle size={13} /> Module M8 • Dermatology & Cutaneous Oncology
+            <AlertTriangle size={13} /> Dermatology & Cutaneous Oncology
           </span>
           <span style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>
             Deep 4-Block Hierarchical CNN • 97.98% Test Accuracy (HAM10000)
@@ -306,7 +324,14 @@ export default function SkinCancerView({ setTab }) {
         <DiagnosticResultCard 
           result={result} 
           title="Dermoscopic Skin Cancer Assessment (HAM10000)"
-          onReset={() => { setResult(null); setFile(null); setPreview(null); setSelectedDemo(null); }}
+          onWorkflowStageChange={pipelineProgress.handleWorkflowStageChange}
+          onReset={() => {
+            setResult(null);
+            setFile(null);
+            setPreview(null);
+            setSelectedDemo(null);
+            pipelineProgress.reset();
+          }}
         />
       )}
 

@@ -2,6 +2,8 @@ import React, { useState, useRef } from 'react';
 import { Scan, Upload, Play, RefreshCw, AlertCircle, CheckCircle, Image as ImageIcon, Sparkles, FileText } from 'lucide-react';
 import { predictXRay } from '../services/api';
 import DiagnosticResultCard from './DiagnosticResultCard';
+import ClinicalPipelineProgressModal from './ClinicalPipelineProgressModal';
+import useClinicalPipelineProgress from '../hooks/useClinicalPipelineProgress';
 
 export default function XRayView() {
   const [file, setFile] = useState(null);
@@ -10,6 +12,7 @@ export default function XRayView() {
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
   const resultRef = useRef(null);
+  const pipelineProgress = useClinicalPipelineProgress();
 
   const handleFileChange = (e) => {
     const selected = e.target.files[0];
@@ -18,6 +21,7 @@ export default function XRayView() {
       setPreview(URL.createObjectURL(selected));
       setResult(null);
       setError(null);
+      pipelineProgress.reset();
     }
   };
 
@@ -61,16 +65,21 @@ export default function XRayView() {
         const sampleFile = new File([blob], `sample_${sampleType}_xray.png`, { type: 'image/png' });
         setFile(sampleFile);
         setPreview(URL.createObjectURL(sampleFile));
+        setResult(null);
+        pipelineProgress.start();
 
         // Auto predict
         try {
           const res = await predictXRay(sampleFile);
           setResult(res);
+          pipelineProgress.transition('awaiting_review');
           setTimeout(() => {
             resultRef.current?.scrollIntoView({ behavior: 'smooth' });
           }, 150);
         } catch (err) {
-          setError(err.message || 'X-Ray analysis failed');
+          const message = err.message || 'X-Ray analysis failed';
+          setError(message);
+          pipelineProgress.fail(message, 'prediction');
         } finally {
           setLoading(false);
         }
@@ -91,14 +100,19 @@ export default function XRayView() {
 
     setLoading(true);
     setError(null);
+    setResult(null);
+    pipelineProgress.start();
     try {
       const res = await predictXRay(file);
       setResult(res);
+      pipelineProgress.transition('awaiting_review');
       setTimeout(() => {
         resultRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 150);
     } catch (err) {
-      setError(err.message || 'X-Ray analysis failed');
+      const message = err.message || 'X-Ray analysis failed';
+      setError(message);
+      pipelineProgress.fail(message, 'prediction');
     } finally {
       setLoading(false);
     }
@@ -106,6 +120,15 @@ export default function XRayView() {
 
   return (
     <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '1.75rem' }}>
+      <ClinicalPipelineProgressModal
+        isOpen={pipelineProgress.isOpen}
+        stage={pipelineProgress.stage}
+        error={pipelineProgress.error}
+        failedAt={pipelineProgress.failedAt}
+        onClose={pipelineProgress.close}
+        diseaseTitle="Pneumonia (Chest Radiography)"
+        modality="imaging"
+      />
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: '1rem' }}>
         <div>
@@ -274,7 +297,13 @@ export default function XRayView() {
           <DiagnosticResultCard
             result={result}
             title="Chest Radiography Diagnostic Report"
-            onReset={() => { setResult(null); setFile(null); setPreview(null); }}
+            onWorkflowStageChange={pipelineProgress.handleWorkflowStageChange}
+            onReset={() => {
+              setResult(null);
+              setFile(null);
+              setPreview(null);
+              pipelineProgress.reset();
+            }}
           />
         )}
       </div>

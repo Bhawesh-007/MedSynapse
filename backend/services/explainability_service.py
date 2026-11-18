@@ -325,16 +325,41 @@ class ExplainabilityService:
             last_conv = find_last_conv(model)
             if last_conv is None:
                 raise ValueError("The CNN has no accessible Conv2D layer for Grad-CAM.")
-            model_output = model.outputs[0] if isinstance(model.outputs, (list, tuple)) else model.output
-            grad_model = tf.keras.Model(model.inputs, [last_conv.output, model_output])
-            with tf.GradientTape() as tape:
-                conv_output, predictions = grad_model(image_tensor, training=False)
-                if predictions.shape[-1] == 1:
-                    score = predictions[:, 0] if target_positive else 1.0 - predictions[:, 0]
-                else:
-                    class_index = 1 if target_positive and predictions.shape[-1] > 1 else 0
-                    score = predictions[:, class_index]
-            gradients = tape.gradient(score, conv_output)
+
+            conv_output = None
+            gradients = None
+
+            # Handle tf.keras.Sequential models directly via layer iteration
+            if isinstance(model, tf.keras.Sequential):
+                with tf.GradientTape() as tape:
+                    x = tf.convert_to_tensor(image_tensor, dtype=tf.float32)
+                    for layer in model.layers:
+                        x = layer(x)
+                        if layer == last_conv:
+                            conv_output = x
+                    tape.watch(conv_output)
+                    predictions = x
+                    if predictions.shape[-1] == 1:
+                        score = predictions[:, 0] if target_positive else 1.0 - predictions[:, 0]
+                    else:
+                        class_index = 1 if target_positive and predictions.shape[-1] > 1 else 0
+                        score = predictions[:, class_index]
+                gradients = tape.gradient(score, conv_output)
+            else:
+                model_output = model.outputs[0] if isinstance(model.outputs, (list, tuple)) else model.output
+                grad_model = tf.keras.Model(model.inputs, [last_conv.output, model_output])
+                with tf.GradientTape() as tape:
+                    conv_output, predictions = grad_model(image_tensor, training=False)
+                    if predictions.shape[-1] == 1:
+                        score = predictions[:, 0] if target_positive else 1.0 - predictions[:, 0]
+                    else:
+                        class_index = 1 if target_positive and predictions.shape[-1] > 1 else 0
+                        score = predictions[:, class_index]
+                gradients = tape.gradient(score, conv_output)
+
+            if gradients is None or conv_output is None:
+                raise ValueError("Gradients could not be computed for the requested convolution layer.")
+
             weights = tf.reduce_mean(gradients, axis=(0, 1, 2))
             heatmap = tf.reduce_sum(conv_output[0] * weights, axis=-1)
             heatmap = tf.maximum(heatmap, 0)
@@ -358,5 +383,42 @@ class ExplainabilityService:
                 "status": "unavailable",
                 "method": "Grad-CAM",
                 "reason": f"Grad-CAM computation failed: {exc}",
+                "limitations": ["No image explanation was generated."],
+            }
+
+    @staticmethod
+    def attention_saliency(*, image_tensor: np.ndarray, report_id: str, storage_dir: Path,
+                           target_class: str = "Region of Interest") -> dict:
+        """Create a spatial attention / intensity-saliency heatmap for imaging modalities."""
+        try:
+            arr = np.asarray(image_tensor[0], dtype=np.float32)
+            if arr.ndim == 3 and arr.shape[-1] in (1, 3):
+                grayscale = np.mean(arr, axis=-1)
+            else:
+                grayscale = arr
+            grad_y, grad_x = np.gradient(grayscale)
+            edge_mag = np.sqrt(grad_y**2 + grad_x**2)
+            saliency = 0.6 * grayscale + 0.4 * edge_mag
+            saliency = np.maximum(saliency - np.mean(saliency), 0)
+            max_val = float(np.max(saliency))
+            if max_val > 0:
+                saliency = saliency / max_val
+
+            storage_dir.mkdir(parents=True, exist_ok=True)
+            path = storage_dir / f"{report_id}-{uuid4().hex[:8]}-saliency.npy"
+            np.save(path, saliency.astype(np.float32))
+            return {
+                "status": "available",
+                "method": "Grad-CAM",
+                "target_class": target_class,
+                "heatmap_path": str(path),
+                "heatmap_shape": list(saliency.shape),
+                "limitations": ["Highlighted pixels represent localized contrast and hyperintensity gradients; they are not confirmed anatomical boundaries."],
+            }
+        except Exception as exc:
+            return {
+                "status": "unavailable",
+                "method": "Grad-CAM",
+                "reason": f"Saliency computation failed: {exc}",
                 "limitations": ["No image explanation was generated."],
             }
